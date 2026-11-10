@@ -1,10 +1,31 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Capability for the main window",
-  "windows": ["main"],
+  "description": "capability for the all windows",
+  "windows": [
+    "*"
+  ],
   "permissions": [
     "core:default",
-    "opener:default"
+    "opener:default",
+    "core:window:default",
+    "core:window:allow-show",
+    "core:window:allow-hide",
+    "core:window:allow-close",
+    "core:window:allow-center",
+    "core:window:allow-set-size",
+    "core:window:allow-minimize",
+    "core:window:allow-maximize",
+    "core:window:allow-set-focus",
+    "core:window:allow-set-position",
+    "core:window:allow-set-resizable",
+    "core:window:allow-start-dragging",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-set-always-on-bottom",
+    "core:webview:allow-create-webview-window",
+    "wallpaper:default",
+    "fs:default",
+    "dialog:default",
+    "store:default"
   ]
 }

@@ -1,5 +1,5 @@
 {
-  "name": "launcher",
+  "name": "wendy",
   "private": true,
   "type": "module",
   "scripts": {
@@ -11,19 +11,30 @@
     "vite:build": "tsc && vite build"
   },
   "dependencies": {
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0",
-    "@tauri-apps/api": "^2",
-    "@tauri-apps/plugin-opener": "^2"
+    "@heroui/react": "^3.2.7",
+    "@heroui/styles": "^3.2.7",
+    "@tauri-apps/api": "^2.12.4",
+    "@tauri-apps/plugin-dialog": "~2.8.4",
+    "@tauri-apps/plugin-fs": "~2.7.1",
+    "@tauri-apps/plugin-opener": "^2.7.3",
+    "@tauri-apps/plugin-store": "~2.5.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-grid-layout": "^2.3.0",
+    "react-icons": "^5.7.0",
+    "react-resizable": "^4.0.2",
+    "react-router": "^8.5.1",
+    "tauri-plugin-wallpaper": "^4.1.0",
+    "zustand": "^5.1.0"
   },
   "devDependencies": {
-    "@tailwindcss/vite": "4.3.3",
-    "@types/node": "26.1.1",
-    "@types/react": "^19.1.8",
-    "@types/react-dom": "^19.1.6",
-    "@vitejs/plugin-react": "^6.0.2",
-    "typescript": "~6.0.3",
-    "vite": "^8.0.16",
-    "@tauri-apps/cli": "^2"
+    "@tailwindcss/vite": "4.3.5",
+    "@tauri-apps/cli": "^2.12.4",
+    "@types/node": "26.6.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.3.0",
+    "typescript": "~7.0.2",
+    "vite": "^8.3.7"
   }
 }

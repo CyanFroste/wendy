@@ -3,18 +3,19 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
 
+const dirname = import.meta.dirname
 const host = process.env.TAURI_DEV_HOST
 
 export default defineConfig(async () => ({
   plugins: [react(), tailwindcss()],
-  publicDir: path.resolve(__dirname, 'assets'),
+  publicDir: path.resolve(dirname, 'assets'),
   build: {
-    outDir: path.resolve(__dirname, 'build'),
+    outDir: path.resolve(dirname, 'build'),
     chunkSizeWarningLimit: 2000,
     target: 'esnext',
   },
   resolve: {
-    alias: { '@': path.resolve(__dirname, 'src') },
+    alias: { '@': path.resolve(dirname, 'src') },
   },
   clearScreen: false,
   server: {

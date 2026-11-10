@@ -1,0 +1,58 @@
+@import 'tailwindcss';
+@import '@heroui/styles';
+/* @import 'react-grid-layout/css/styles.css';
+@import 'react-resizable/css/styles.css'; */
+
+:root,
+.light,
+.default,
+[data-theme='light'],
+[data-theme='default'] {
+  --radius: 0.5rem;
+  --field-radius: 0.5rem;
+
+  --font-sans: 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+svg {
+  width: 1em;
+  height: 1em;
+}
+
+svg[data-slot='spinner-icon'] {
+  width: 100%;
+  height: 100%;
+}
+
+/* 
+::selection {
+  @apply bg-default-700 text-background;
+}
+
+::-webkit-scrollbar {
+  @apply size-2.5;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-default-200/50;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-default-100/25;
+} 
+*/
+
+@font-face {
+  font-family: 'Inter';
+  src: url('/fonts/InterVariable.ttf') format('truetype');
+  font-weight: 300 900;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('/fonts/JetBrainsMonoVariable.ttf') format('truetype');
+  font-weight: 300 900;
+  font-style: normal;
+}
