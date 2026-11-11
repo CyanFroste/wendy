@@ -5,7 +5,7 @@ import type { ActiveWidget, Dictionary } from '@/types'
 
 export const activeWidgetsStore = await loadStore('active-widgets-store.json', { autoSave: false })
 
-type WidgetWindowsStore = Dictionary<WebviewWindow>
+export type WidgetWindowsStore = Dictionary<WebviewWindow>
 
 export const widgetWindowsStore = createStore<WidgetWindowsStore>(() => ({}))
 
@@ -32,12 +32,12 @@ export function createWidgetWindow({ meta, instanceId, isLocked, height, width, 
     visible: false,
     transparent: true,
     decorations: false,
-    // skipTaskbar: true,
+    skipTaskbar: true,
   })
 
   window.once('tauri://created', async () => {
-    // TODO: enable on prod, find ways to pin the window (ignore Win + D)
-    // await window.setAlwaysOnBottom(true)
+    // TODO: find ways to pin the window (ignore Win + D)
+    if (import.meta.env.PROD) await window.setAlwaysOnBottom(true)
     await window.show()
   })
 

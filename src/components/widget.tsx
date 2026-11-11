@@ -46,6 +46,13 @@ export function Widget() {
     currentWindow.close()
   }
 
+  const onEdit = () => {
+    if (!widget) return
+    const key = getWidgetKey(widget.meta.id, widget.instanceId)
+
+    emitTo('main', 'redirect', `/editor/${key}`)
+  }
+
   useEffect(() => {
     if (!id || !instanceId) return
     ;(async () => {
@@ -135,7 +142,7 @@ export function Widget() {
   }, [widget, showControls])
 
   return (
-    <div className="size-full flex flex-col gap-4 bg-background">
+    <div className="size-full flex flex-col gap-4">
       <div
         className={cn(
           'flex flex-col fixed inset-0 z-100 transition-opacity duration-300 ease-in-out',
@@ -152,11 +159,7 @@ export function Widget() {
               <PiLock className="text-lg" />
             </ToggleButton>
 
-            <Button
-              isIconOnly
-              size="sm"
-              variant="ghost"
-              onPress={async () => await emitTo('main', 'redirect', `/editor/${id}/${instanceId}`)}>
+            <Button isIconOnly size="sm" variant="ghost" onPress={onEdit}>
               <PiNotePencil className="text-lg" />
             </Button>
 
@@ -169,9 +172,7 @@ export function Widget() {
         <ResizeControls />
       </div>
 
-      {srcDoc && (
-        <iframe ref={containerRef} srcDoc={srcDoc} sandbox="allow-scripts" className="size-full flex rounded-lg" />
-      )}
+      {srcDoc && <iframe ref={containerRef} srcDoc={srcDoc} sandbox="allow-scripts" className="size-full flex" />}
     </div>
   )
 }

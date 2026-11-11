@@ -37,7 +37,7 @@ export function Window() {
         </Link>
 
         <div className="flex gap-2 items-center ml-auto">
-          <Button isIconOnly size="sm" variant="danger-soft" onPress={() => currentWindow.close()}>
+          <Button isIconOnly size="sm" variant="danger-soft" onPress={() => currentWindow.hide()}>
             <PiX />
           </Button>
         </div>

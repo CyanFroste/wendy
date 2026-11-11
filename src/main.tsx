@@ -3,21 +3,29 @@ import '@/styles.css'
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { createBrowserRouter, RouterProvider } from 'react-router'
-// import {
-//   getCurrentWindow,
-//   currentMonitor as getCurrentMonitor,
-//   PhysicalPosition,
-//   PhysicalSize,
-// } from '@tauri-apps/api/window'
+import {
+  getCurrentWindow,
+  // currentMonitor as getCurrentMonitor,
+  // PhysicalPosition,
+  // PhysicalSize,
+} from '@tauri-apps/api/window'
+import { TrayIcon } from '@tauri-apps/api/tray'
+import { Menu } from '@tauri-apps/api/menu'
+import { defaultWindowIcon } from '@tauri-apps/api/app'
 // import { attach as attachWindowAsWallpaper, setInteractive } from 'tauri-plugin-wallpaper'
 import { Window } from '@/components/windows'
 import { Settings } from '@/components/settings'
 import { Picker } from '@/components/picker'
 import { Editor } from '@/components/editor'
 import { Widget } from '@/components/widget'
+import { activeWidgetsStore, createWidgetWindow } from '@/utils'
+import { widgetWindowsStore } from '@/utils'
+import type { ActiveWidget } from '@/types'
 
 // await attachWindowAsWallpaper('main')
 // await setInteractive(true, 'main')
+
+const currentWindow = getCurrentWindow()
 
 const router = createBrowserRouter([
   {
@@ -37,3 +45,63 @@ ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
     <RouterProvider router={router} />
   </React.StrictMode>,
 )
+
+if (currentWindow.label === 'main' && window.location.pathname === '/') {
+  for (const [key, widget] of await activeWidgetsStore.entries<ActiveWidget>()) {
+    const window = createWidgetWindow(widget)
+
+    widgetWindowsStore.setState(state => ({ ...state, [key]: window }))
+  }
+
+  currentWindow.onCloseRequested(async () => {
+    const windows = Object.values(widgetWindowsStore.getState())
+    if (!windows.length) return
+
+    await activeWidgetsStore.reload()
+
+    for (const window of windows) {
+      const key = window.label
+      const existing = await activeWidgetsStore.get<ActiveWidget>(key)
+      if (!existing) continue
+
+      const { width, height } = await window.outerSize()
+      const { x, y } = await window.outerPosition()
+
+      await activeWidgetsStore.set(key, { ...existing, x, y, width, height })
+      await window.close()
+    }
+
+    await activeWidgetsStore.save()
+  })
+
+  const showCurrentWindow = async () => await currentWindow.show()
+  const closeCurrentWindow = async () => await currentWindow.close()
+
+  await TrayIcon.new({
+    title: 'wendy',
+    icon: (await defaultWindowIcon())!,
+    menuOnLeftClick: false,
+    menu: await Menu.new({
+      items: [
+        { id: 'open', text: 'Open', action: showCurrentWindow },
+        { id: 'close', text: 'Close', action: closeCurrentWindow },
+      ],
+    }),
+    action: async evt => {
+      switch (evt.type) {
+        case 'DoubleClick':
+          await showCurrentWindow()
+          break
+      }
+    },
+  })
+}
+
+document.addEventListener('contextmenu', evt => {
+  if (import.meta.env.PROD) evt.preventDefault()
+})
+
+window.addEventListener('keydown', evt => {
+  const key = evt.key.toLowerCase()
+  if (import.meta.env.PROD && evt.ctrlKey && (key === 'r' || key === 'f')) evt.preventDefault()
+})
