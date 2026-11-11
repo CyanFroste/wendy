@@ -9,17 +9,12 @@ type WidgetWindowsStore = Dictionary<WebviewWindow>
 
 export const widgetWindowsStore = createStore<WidgetWindowsStore>(() => ({}))
 
-export function createWidgetWindow({
-  meta,
-  instanceId = crypto.randomUUID(),
-  isLocked = false,
-  height = 400,
-  width = 400,
-  x = 20,
-  y = 20,
-  data,
-}: Partial<ActiveWidget> & Required<Pick<ActiveWidget, 'meta'>>) {
-  const key = `${meta.id}/${instanceId}`
+export function getWidgetKey(id: string, instanceId: string) {
+  return `${id}/${instanceId}`
+}
+
+export function createWidgetWindow({ meta, instanceId, isLocked, height, width, x, y, data: _ }: ActiveWidget) {
+  const key = getWidgetKey(meta.id, instanceId)
   const url = `/widgets/${key}`
 
   const window = new WebviewWindow(key, {
@@ -29,9 +24,9 @@ export function createWidgetWindow({
     width,
     x,
     y,
-    resizable: isLocked,
-    minHeight: 400,
-    minWidth: 400,
+    resizable: !isLocked,
+    minHeight: 240,
+    minWidth: 240,
     shadow: false,
     focus: false,
     visible: false,
@@ -41,11 +36,16 @@ export function createWidgetWindow({
   })
 
   window.once('tauri://created', async () => {
-    await window.setAlwaysOnBottom(true)
+    // TODO: enable on prod, find ways to pin the window (ignore Win + D)
+    // await window.setAlwaysOnBottom(true)
     await window.show()
   })
 
   window.once('tauri://error', err => console.error(err))
 
-  return { window, key, instanceId, meta, isLocked, height, width, x, y, data }
+  return window
+}
+
+export const RPC_SCOPE_MAP: Dictionary<string[]> = {
+  'system.get_storage_info': ['system:read'],
 }

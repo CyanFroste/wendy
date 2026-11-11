@@ -1,10 +1,48 @@
 use crate::types::{Error, State, Widget};
 use crate::utils;
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::fs;
+use std::path::{Component, Path, PathBuf};
 use tauri::AppHandle;
 use tauri::State as AppState;
+use tauri::ipc::Response;
 use tauri_plugin_fs::FsExt;
+
+#[tauri::command]
+pub async fn get_widget_asset(
+    state: AppState<State, '_>,
+    widget_id: String,
+    path: String,
+) -> Result<Response, Error> {
+    // only getting for widgets from cache for now
+    let Some(widget_path) = state
+        .widgets_cache
+        .read()
+        .ok()
+        .and_then(|x| x.get(&widget_id).map(|x| x.path.clone()))
+    else {
+        return Err(Error::new("widget not found"));
+    };
+
+    let path: PathBuf = Path::new(&path)
+        .components()
+        .filter_map(|x| match x {
+            Component::Normal(s) => Some(s),
+            _ => None,
+        })
+        .collect();
+
+    let asset_path = widget_path.join("assets").join(path);
+
+    if !asset_path.exists() || !asset_path.is_file() {
+        return Err(Error::new("asset not found"));
+    }
+
+    let bytes = fs::read(&asset_path)?;
+    let res = Response::new(bytes);
+
+    Ok(res)
+}
 
 #[tauri::command]
 pub fn get_widgets(

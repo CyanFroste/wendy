@@ -23,7 +23,8 @@ async fn main() -> Result<()> {
         .invoke_handler(tauri::generate_handler![
             commands::get_widgets,
             commands::get_widget,
-            commands::add_path_to_fs_scope
+            commands::add_path_to_fs_scope,
+            commands::get_widget_asset
         ])
         .run(tauri::generate_context!())?;
 

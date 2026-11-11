@@ -19,6 +19,19 @@ export type ActiveWidget = {
   y: number
 }
 
+export type RpcRequest = {
+  type: 'RPC_REQUEST'
+  id: string
+  method: string
+  params: Dictionary
+}
+
+export type RpcResponse = {
+  type: 'RPC_RESPONSE' | 'RPC_ERROR_RESPONSE'
+  id: string
+  payload: unknown
+}
+
 export type Nullable<T> = T | null | undefined
 export type Dictionary<T = unknown> = Record<string, T>
 

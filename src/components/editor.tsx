@@ -5,12 +5,12 @@ import { convertFileSrc } from '@tauri-apps/api/core'
 import { Button, Separator } from '@heroui/react'
 import { PiArrowClockwise, PiPlus } from 'react-icons/pi'
 import { getWidget } from '@/commands'
-import { activeWidgetsStore, createWidgetWindow, widgetWindowsStore } from '@/utils'
+import { activeWidgetsStore, createWidgetWindow, getWidgetKey, widgetWindowsStore } from '@/utils'
 import { store as settingsStore } from '@/components/settings'
-import preludeScript from '@/scripts/editor-prelude?raw'
+import preludeScript from '@/scripts/widget-editor-prelude?raw'
 import type { ActiveWidget, Nullable, Widget } from '@/types'
 
-type PathParams = { id: string; instanceId: string }
+type PathParams = { id: string; instanceId?: string }
 
 export function Editor() {
   const { id, instanceId } = useParams<PathParams>()
@@ -20,11 +20,25 @@ export function Editor() {
   const [srcDoc, setSrcDoc] = useState('')
 
   const onCreate = async (widget: Widget, data?: Nullable<unknown>) => {
-    const { window, key, ...activeWidget } = createWidgetWindow({ meta: widget, data })
+    const instanceId = crypto.randomUUID()
+    const key = getWidgetKey(widget.id, instanceId)
 
-    widgetWindowsStore.setState(state => ({ ...state, [key]: window }))
-    await activeWidgetsStore.set(key, activeWidget satisfies ActiveWidget)
+    const activeWidget: ActiveWidget = {
+      instanceId,
+      meta: widget,
+      isLocked: false,
+      height: 400,
+      width: 400,
+      x: 20,
+      y: 20,
+      data,
+    }
+
+    await activeWidgetsStore.set(key, activeWidget)
     await activeWidgetsStore.save()
+
+    const window = createWidgetWindow(activeWidget)
+    widgetWindowsStore.setState(state => ({ ...state, [key]: window }))
   }
 
   const onAction = async () => {

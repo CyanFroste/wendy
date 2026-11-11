@@ -1,4 +1,6 @@
-import { Link, Outlet } from 'react-router'
+import { useEffect } from 'react'
+import { Link, Outlet, useNavigate } from 'react-router'
+import { listen } from '@tauri-apps/api/event'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { Button, Separator } from '@heroui/react'
 import { buttonVariants } from '@heroui/styles'
@@ -6,6 +8,18 @@ import { PiGear, PiX } from 'react-icons/pi'
 
 export function Window() {
   const currentWindow = getCurrentWindow()
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    const unlisten = listen<string>('redirect', async evt => {
+      navigate(evt.payload)
+      await currentWindow.setFocus()
+    })
+
+    return () => {
+      unlisten.then(fn => fn())
+    }
+  }, [])
 
   return (
     <div className="flex flex-col h-full overflow-auto p-2 gap-2 bg-background">

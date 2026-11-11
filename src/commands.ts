@@ -12,3 +12,11 @@ export async function getWidgets(widgetsPath: string, refetch = false) {
 export async function getWidget(widgetsPath: string, id: string) {
   return await invoke<Nullable<Widget>>('get_widget', { widgetsPath, id })
 }
+
+export async function invokeWidgetRpc(method: string, params: unknown) {
+  return await invoke<unknown>('widget_rpc', { method, params })
+}
+
+export async function getWidgetAsset(widgetId: string, path: string) {
+  return await invoke<unknown>('get_widget_asset', { widgetId, path })
+}
