@@ -33,10 +33,11 @@ export function createWidgetWindow({ meta, instanceId, isLocked, height, width, 
     transparent: true,
     decorations: false,
     skipTaskbar: true,
+    maximizable: false,
+    minimizable: false,
   })
 
   window.once('tauri://created', async () => {
-    // TODO: find ways to pin the window (ignore Win + D)
     if (import.meta.env.PROD) await window.setAlwaysOnBottom(true)
     await window.show()
   })
@@ -44,8 +45,4 @@ export function createWidgetWindow({ meta, instanceId, isLocked, height, width, 
   window.once('tauri://error', err => console.error(err))
 
   return window
-}
-
-export const RPC_SCOPE_MAP: Dictionary<string[]> = {
-  'system.get_storage_info': ['system:read'],
 }

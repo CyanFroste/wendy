@@ -1,16 +1,23 @@
+use parking_lot::{Mutex, RwLock};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
-use std::sync::{Arc, RwLock};
+use sysinfo::System;
 
-#[derive(Default, Debug, Clone)]
+#[derive(Debug)]
 pub struct State {
-    pub widgets_cache: Arc<RwLock<BTreeMap<String, Widget>>>,
+    pub widgets_cache: RwLock<BTreeMap<String, Widget>>,
+    pub installed_apps: Vec<InstalledApp>,
+    pub system: Mutex<System>,
 }
 
 impl State {
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(system: System) -> Self {
+        Self {
+            widgets_cache: RwLock::new(BTreeMap::new()),
+            installed_apps: Vec::new(),
+            system: Mutex::new(system),
+        }
     }
 }
 
@@ -27,6 +34,44 @@ pub struct Widget {
     #[serde(skip_deserializing)]
     pub path: PathBuf,
     // pub category: WidgetCategory,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CpuInfo {
+    pub brand: String,
+    pub global_usage: f32,
+    pub core_count: usize,
+    pub core_usages: Vec<f32>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RamInfo {
+    pub total_bytes: u64,
+    pub used_bytes: u64,
+    pub available_bytes: u64,
+    pub swap_total_bytes: u64,
+    pub swap_used_bytes: u64,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiskInfo {
+    pub name: String,
+    pub mount_point: String,
+    pub file_system: String,
+    pub total_bytes: u64,
+    pub available_bytes: u64,
+    pub is_removable: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InstalledApp {
+    pub name: String,
+    pub path: String,
+    pub icon_base64: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -60,6 +105,12 @@ impl From<std::io::Error> for Error {
 
 impl From<tauri::Error> for Error {
     fn from(value: tauri::Error) -> Self {
+        Self::from_error(value)
+    }
+}
+
+impl From<sysinfo::Error> for Error {
+    fn from(value: sysinfo::Error) -> Self {
         Self::from_error(value)
     }
 }

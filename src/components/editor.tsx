@@ -4,11 +4,11 @@ import { readTextFile } from '@tauri-apps/plugin-fs'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import { Button, Separator } from '@heroui/react'
 import { PiArrowClockwise, PiPlus } from 'react-icons/pi'
-import { getWidget } from '@/commands'
+import { getWidget, getWidgetAsset, invokeWidgetRpc } from '@/commands'
 import { activeWidgetsStore, createWidgetWindow, getWidgetKey, widgetWindowsStore } from '@/utils'
 import { store as settingsStore } from '@/components/settings'
 import preludeScript from '@/scripts/widget-editor-prelude?raw'
-import type { ActiveWidget, Nullable, Widget } from '@/types'
+import type { ActiveWidget, Nullable, RpcRequest, RpcResponse, Widget } from '@/types'
 
 type PathParams = { id: string; instanceId?: string }
 
@@ -73,6 +73,51 @@ export function Editor() {
     if (instanceId) return
     else onCreate(widget, data)
   }
+
+  useEffect(() => {
+    const containerWindow = editorRef.current?.contentWindow
+    if (!containerWindow || !widget) return
+
+    const handler = async (event: MessageEvent<RpcRequest>) => {
+      if (event.source !== containerWindow) return
+      const { type, id, method, params } = event.data
+
+      if (type === 'RPC_REQUEST') {
+        try {
+          const res: RpcResponse = { type: 'RPC_RESPONSE', id, payload: null }
+
+          switch (method) {
+            case 'utils.get_asset_url':
+              res.payload = convertFileSrc(`${widget.path}/assets/${params.path}`)
+              break
+            case 'utils.get_asset':
+              res.payload = await getWidgetAsset(widget.id, params.path as string)
+              break
+            default:
+              res.payload = await invokeWidgetRpc(widget.id, method, params)
+              break
+          }
+
+          containerWindow.postMessage(res, '*')
+        } catch (err) {
+          const payload = !err
+            ? 'unknown error'
+            : err instanceof Error
+              ? err.message
+              : typeof err === 'string'
+                ? err
+                : typeof err === 'object' && 'message' in err
+                  ? err.message
+                  : JSON.stringify(err)
+
+          containerWindow.postMessage({ type: 'RPC_ERROR_RESPONSE', id, payload } satisfies RpcResponse, '*')
+        }
+      }
+    }
+
+    window.addEventListener('message', handler)
+    return () => window.removeEventListener('message', handler)
+  }, [editorRef, srcDoc, widget])
 
   useEffect(() => {
     if (!id) return

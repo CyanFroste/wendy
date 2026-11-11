@@ -6,11 +6,23 @@ mod types;
 mod utils;
 
 use anyhow::Result;
+use sysinfo::{CpuRefreshKind, MemoryRefreshKind, RefreshKind, System};
 use types::State;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let state = State::new();
+    let mut system = System::new_with_specifics(
+        RefreshKind::nothing()
+            .with_cpu(CpuRefreshKind::everything())
+            .with_memory(MemoryRefreshKind::everything()),
+    )?;
+    
+    system.refresh_cpu_all();
+    system.refresh_memory();
+
+    let mut state = State::new(system);
+
+    state.installed_apps = utils::get_installed_apps().await?;
 
     tauri::Builder::default()
         .plugin(tauri_plugin_store::Builder::new().build())
@@ -21,10 +33,11 @@ async fn main() -> Result<()> {
         .plugin(tauri_plugin_wallpaper::init())
         .manage(state)
         .invoke_handler(tauri::generate_handler![
+            commands::widget_rpc,
             commands::get_widgets,
             commands::get_widget,
             commands::add_path_to_fs_scope,
-            commands::get_widget_asset
+            commands::get_widget_asset,
         ])
         .run(tauri::generate_context!())?;
 

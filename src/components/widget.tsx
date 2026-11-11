@@ -6,12 +6,14 @@ import { getCurrentWindow } from '@tauri-apps/api/window'
 import { emitTo } from '@tauri-apps/api/event'
 import { Button, ToggleButton } from '@heroui/react'
 import { cn } from '@heroui/styles'
+import formatBytes from 'pretty-bytes'
 import { PiLock, PiNotePencil, PiTrash } from 'react-icons/pi'
 import { getWidgetAsset, invokeWidgetRpc } from '@/commands'
-import { activeWidgetsStore, getWidgetKey, RPC_SCOPE_MAP } from '@/utils'
+import { activeWidgetsStore, getWidgetKey } from '@/utils'
 import preludeScript from '@/scripts/widget-prelude?raw'
 import commonPreludeCss from '@/scripts/common-prelude.css?raw'
 import preludeCss from '@/scripts/widget-prelude.css?raw'
+import type { Options as FormatBytesOptions } from 'pretty-bytes'
 import type { ActiveWidget, Nullable, Widget, RpcRequest, RpcResponse } from '@/types'
 
 type PathParams = { id: string; instanceId: string }
@@ -75,10 +77,6 @@ export function Widget() {
 
       if (type === 'RPC_REQUEST') {
         try {
-          const required = RPC_SCOPE_MAP[method]
-          if (required && !widget.meta.permissions.some(p => required?.includes(p)))
-            throw new Error('permission denied')
-
           const res: RpcResponse = { type: 'RPC_RESPONSE', id, payload: null }
 
           switch (method) {
@@ -88,14 +86,26 @@ export function Widget() {
             case 'utils.get_asset':
               res.payload = await getWidgetAsset(widget.meta.id, params.path as string)
               break
+            case 'utils.format_bytes':
+              res.payload = formatBytes(params.value as number, params.options as FormatBytesOptions)
+              break
             default:
-              res.payload = await invokeWidgetRpc(method, params)
+              res.payload = await invokeWidgetRpc(widget.meta.id, method, params)
               break
           }
 
           containerWindow.postMessage(res, '*')
         } catch (err) {
-          const payload = err instanceof Error ? err.message : String(err)
+          const payload = !err
+            ? 'unknown error'
+            : err instanceof Error
+              ? err.message
+              : typeof err === 'string'
+                ? err
+                : typeof err === 'object' && 'message' in err
+                  ? err.message
+                  : JSON.stringify(err)
+
           containerWindow.postMessage({ type: 'RPC_ERROR_RESPONSE', id, payload } satisfies RpcResponse, '*')
         }
       }

@@ -34,11 +34,15 @@ window.widgetApi = (() => {
 
   return {
     system: {
-      getStorageInfo: () => call('system.get_storage_info'),
+      getInstalledApps: () => call('system.get_installed_apps'),
+      getDiskInfo: () => call('system.get_disk_info'),
+      getRamInfo: () => call('system.get_ram_info'),
+      getCpuInfo: () => call('system.get_cpu_info'),
     },
     utils: {
       getAssetUrl: path => call('utils.get_asset_url', { path }),
       getAsset: path => call('utils.get_asset', { path }),
+      formatBytes: (value, options) => call('utils.format_bytes', { value, options }),
     },
   }
 })()
