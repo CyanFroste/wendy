@@ -9,7 +9,7 @@ import { cn } from '@heroui/styles'
 import formatBytes from 'pretty-bytes'
 import { PiLock, PiNotePencil, PiTrash } from 'react-icons/pi'
 import { getWidgetAsset, invokeWidgetRpc } from '@/commands'
-import { activeWidgetsStore, getWidgetKey } from '@/utils'
+import { activeWidgetsStore, extractErrorMessage, getWidgetKey } from '@/utils'
 import preludeScript from '@/scripts/widget-prelude?raw'
 import commonPreludeCss from '@/scripts/common-prelude.css?raw'
 import preludeCss from '@/scripts/widget-prelude.css?raw'
@@ -96,16 +96,7 @@ export function Widget() {
 
           containerWindow.postMessage(res, '*')
         } catch (err) {
-          const payload = !err
-            ? 'unknown error'
-            : err instanceof Error
-              ? err.message
-              : typeof err === 'string'
-                ? err
-                : typeof err === 'object' && 'message' in err
-                  ? err.message
-                  : JSON.stringify(err)
-
+          const payload = extractErrorMessage(err)
           containerWindow.postMessage({ type: 'RPC_ERROR_RESPONSE', id, payload } satisfies RpcResponse, '*')
         }
       }

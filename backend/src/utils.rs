@@ -7,17 +7,19 @@ use std::fs::File;
 use std::path::PathBuf;
 use walkdir::WalkDir;
 
-pub const RPC_SYSTEM_GET_INSTALLED_APPS: &str = "system.get_installed_apps";
 pub const RPC_SYSTEM_GET_CPU_INFO: &str = "system.get_cpu_info";
 pub const RPC_SYSTEM_GET_RAM_INFO: &str = "system.get_ram_info";
 pub const RPC_SYSTEM_GET_DISK_INFO: &str = "system.get_disk_info";
+pub const RPC_SYSTEM_GET_INSTALLED_APPS: &str = "system.get_installed_apps";
+pub const RPC_SYSTEM_OPEN_INSTALLED_APP: &str = "system.open_installed_app";
 
 pub fn get_rpc_required_scopes(method: &str) -> Option<&'static [&'static str]> {
     match method {
-        RPC_SYSTEM_GET_INSTALLED_APPS => Some(&["system:read"]),
         RPC_SYSTEM_GET_CPU_INFO => Some(&["system:read"]),
         RPC_SYSTEM_GET_RAM_INFO => Some(&["system:read"]),
         RPC_SYSTEM_GET_DISK_INFO => Some(&["system:read"]),
+        RPC_SYSTEM_GET_INSTALLED_APPS => Some(&["system:read"]),
+        RPC_SYSTEM_OPEN_INSTALLED_APP => Some(&["system:read", "system:exec"]),
         _ => None,
     }
 }
@@ -50,8 +52,8 @@ pub async fn get_installed_apps() -> Result<Vec<InstalledApp>> {
                     continue;
                 }
 
-                let path = path.to_string_lossy().to_string();
-                let icon_base64 = get_app_icon(&path).await?;
+                let icon_base64 = get_app_icon(path.to_string_lossy()).await?;
+                let path = path.to_path_buf();
 
                 apps.push(InstalledApp {
                     name,

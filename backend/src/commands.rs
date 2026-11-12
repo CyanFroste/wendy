@@ -2,7 +2,7 @@ use crate::types::{CpuInfo, DiskInfo, Error, RamInfo, State, Widget};
 use crate::utils;
 use crate::utils::{
     RPC_SYSTEM_GET_CPU_INFO, RPC_SYSTEM_GET_DISK_INFO, RPC_SYSTEM_GET_INSTALLED_APPS,
-    RPC_SYSTEM_GET_RAM_INFO,
+    RPC_SYSTEM_GET_RAM_INFO, RPC_SYSTEM_OPEN_INSTALLED_APP,
 };
 use serde_json::Value as JsonValue;
 use std::collections::BTreeMap;
@@ -19,7 +19,7 @@ pub async fn widget_rpc(
     state: AppState<State, '_>,
     widget_id: String,
     method: String,
-    _params: JsonValue,
+    params: JsonValue,
 ) -> Result<JsonValue, Error> {
     let widget = state
         .widgets_cache
@@ -89,6 +89,22 @@ pub async fn widget_rpc(
         }
 
         RPC_SYSTEM_GET_INSTALLED_APPS => Ok(serde_json::to_value(&state.installed_apps)?),
+
+        RPC_SYSTEM_OPEN_INSTALLED_APP => {
+            let path = params["path"]
+                .as_str()
+                .ok_or_else(|| Error::new("missing parameter 'path'"))?;
+            let path = PathBuf::from(path);
+
+            if !state.installed_apps.iter().any(|x| x.path == path) {
+                return Err(Error::new("invalid application path"));
+            }
+
+            // ! NOTE: need to make sure this doesn't make the launched app bound to the current process
+            open::that_detached(path)?;
+
+            Ok(JsonValue::Null)
+        }
 
         _ => Err(Error::new("unknown method")),
     }

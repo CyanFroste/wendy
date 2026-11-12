@@ -74,23 +74,20 @@ if (currentWindow.label === 'main' && window.location.pathname === '/') {
     await activeWidgetsStore.save()
   })
 
-  const showCurrentWindow = async () => await currentWindow.show()
-  const closeCurrentWindow = async () => await currentWindow.close()
-
   await TrayIcon.new({
     title: 'wendy',
     icon: (await defaultWindowIcon())!,
     menuOnLeftClick: false,
     menu: await Menu.new({
       items: [
-        { id: 'open', text: 'Open', action: showCurrentWindow },
-        { id: 'close', text: 'Close', action: closeCurrentWindow },
+        { id: 'open', text: 'Open', action: () => currentWindow.show() },
+        { id: 'close', text: 'Close', action: () => currentWindow.close() },
       ],
     }),
     action: async evt => {
       switch (evt.type) {
         case 'DoubleClick':
-          await showCurrentWindow()
+          await currentWindow.show()
           break
       }
     },

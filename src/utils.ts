@@ -46,3 +46,19 @@ export function createWidgetWindow({ meta, instanceId, isLocked, height, width, 
 
   return window
 }
+
+export function extractErrorMessage(err: unknown) {
+  const defaultMessage = 'unknown error'
+
+  if (!err) return defaultMessage
+  else if (err instanceof Error) return err.message
+  else if (typeof err === 'string') return err
+  else if (typeof err === 'object' && 'message' in err) return err.message
+  else {
+    try {
+      return JSON.stringify(err)
+    } catch {
+      return defaultMessage
+    }
+  }
+}

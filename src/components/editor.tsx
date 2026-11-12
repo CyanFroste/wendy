@@ -5,7 +5,7 @@ import { convertFileSrc } from '@tauri-apps/api/core'
 import { Button, Separator } from '@heroui/react'
 import { PiArrowClockwise, PiPlus } from 'react-icons/pi'
 import { getWidget, getWidgetAsset, invokeWidgetRpc } from '@/commands'
-import { activeWidgetsStore, createWidgetWindow, getWidgetKey, widgetWindowsStore } from '@/utils'
+import { activeWidgetsStore, createWidgetWindow, extractErrorMessage, getWidgetKey, widgetWindowsStore } from '@/utils'
 import { store as settingsStore } from '@/components/settings'
 import preludeScript from '@/scripts/widget-editor-prelude?raw'
 import type { ActiveWidget, Nullable, RpcRequest, RpcResponse, Widget } from '@/types'
@@ -100,16 +100,7 @@ export function Editor() {
 
           containerWindow.postMessage(res, '*')
         } catch (err) {
-          const payload = !err
-            ? 'unknown error'
-            : err instanceof Error
-              ? err.message
-              : typeof err === 'string'
-                ? err
-                : typeof err === 'object' && 'message' in err
-                  ? err.message
-                  : JSON.stringify(err)
-
+          const payload = extractErrorMessage(err)
           containerWindow.postMessage({ type: 'RPC_ERROR_RESPONSE', id, payload } satisfies RpcResponse, '*')
         }
       }

@@ -70,7 +70,7 @@ pub struct DiskInfo {
 #[serde(rename_all = "camelCase")]
 pub struct InstalledApp {
     pub name: String,
-    pub path: String,
+    pub path: PathBuf,
     pub icon_base64: Option<String>,
 }
 

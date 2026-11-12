@@ -34,10 +34,11 @@ window.widgetApi = (() => {
 
   return {
     system: {
-      getInstalledApps: () => call('system.get_installed_apps'),
-      getDiskInfo: () => call('system.get_disk_info'),
-      getRamInfo: () => call('system.get_ram_info'),
       getCpuInfo: () => call('system.get_cpu_info'),
+      getRamInfo: () => call('system.get_ram_info'),
+      getDiskInfo: () => call('system.get_disk_info'),
+      getInstalledApps: () => call('system.get_installed_apps'),
+      openInstalledApp: path => call('system.open_installed_app', { path }),
     },
     utils: {
       getAssetUrl: path => call('utils.get_asset_url', { path }),
