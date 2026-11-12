@@ -4,46 +4,75 @@ use crate::types::{
 };
 use crate::utils;
 use crate::utils::{
-    RPC_SYSTEM_GET_CPU_INFO, RPC_SYSTEM_GET_DISK_INFO, RPC_SYSTEM_GET_INSTALLED_APPS,
-    RPC_SYSTEM_GET_RAM_INFO, RPC_SYSTEM_OPEN_INSTALLED_APP,
+    RPC_MEDIA_GET_ACTIVE_MEDIA, RPC_MEDIA_SEND_COMMAND, RPC_SYSTEM_GET_CPU_INFO,
+    RPC_SYSTEM_GET_DISK_INFO, RPC_SYSTEM_GET_INSTALLED_APPS, RPC_SYSTEM_GET_RAM_INFO,
+    RPC_SYSTEM_OPEN_INSTALLED_APP,
 };
 use serde_json::Value as JsonValue;
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 use sysinfo::Disks;
-use tauri::State as AppState;
 use tauri::ipc::Response;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager, State as AppState};
 use tauri_plugin_fs::FsExt;
 
 #[tauri::command]
 pub async fn start_media_listener(
-    app: AppHandle,
+    app_handle: AppHandle,
     media_state: AppState<'_, MediaState>,
+    window_label: String,
 ) -> Result<(), Error> {
-    if media_state.listener.lock().is_some() {
+    let is_started = {
+        let mut subscribers = media_state.subscribers.lock();
+        subscribers.insert(window_label);
+        media_state.listener.lock().is_some()
+    };
+
+    if is_started {
         return Ok(());
     }
 
-    let listener = MediaListener::start(move || {
-        let _ = app.emit("media_updated", ());
-    })
-    .await?;
+    let app_handle = app_handle.clone();
+    let rt = tokio::runtime::Handle::current();
 
+    let listener = tokio::task::spawn_blocking(move || {
+        rt.block_on(MediaListener::start(move || {
+            let rt = tokio::runtime::Handle::current();
+            let app_handle = app_handle.clone();
+
+            tokio::task::spawn_blocking(move || {
+                let subscribers: Vec<String> = app_handle
+                    .state::<MediaState>()
+                    .subscribers
+                    .lock()
+                    .iter()
+                    .cloned()
+                    .collect();
+
+                if subscribers.is_empty() {
+                    return;
+                }
+
+                if let Ok(data) = rt.block_on(get_active_media()) {
+                    for subscriber in subscribers {
+                        let _ = app_handle.emit_to(&subscriber, "media-updated", &data);
+                    }
+                }
+            });
+        }))
+    })
+    .await
+    .map_err(Error::from_error)??;
+
+    let subscribers: Vec<String> = media_state.subscribers.lock().iter().cloned().collect();
     let mut guard = media_state.listener.lock();
-    if guard.is_none() {
+
+    if subscribers.is_empty() {
+        listener.stop();
+    } else if guard.is_none() {
         *guard = Some(listener);
     } else {
-        listener.stop();
-    }
-
-    Ok(())
-}
-
-#[tauri::command]
-pub async fn stop_media_listener(state: AppState<'_, MediaState>) -> Result<(), Error> {
-    if let Some(listener) = state.listener.lock().take() {
         listener.stop();
     }
 
@@ -73,7 +102,7 @@ pub async fn widget_rpc(
     }
 
     match method.as_str() {
-        "media.get_active_media" => {
+        RPC_MEDIA_GET_ACTIVE_MEDIA => {
             let rt = tokio::runtime::Handle::current();
             let data = tokio::task::spawn_blocking(move || rt.block_on(get_active_media()))
                 .await
@@ -82,7 +111,7 @@ pub async fn widget_rpc(
             Ok(serde_json::to_value(&data)?)
         }
 
-        "media.send_command" => {
+        RPC_MEDIA_SEND_COMMAND => {
             let player_id = params["playerId"]
                 .as_str()
                 .ok_or_else(|| Error::new("missing parameter 'playerId'"))?

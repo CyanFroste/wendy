@@ -20,3 +20,7 @@ export async function invokeWidgetRpc(widgetId: string, method: string, params: 
 export async function getWidgetAsset(widgetId: string, path: string) {
   return await invoke<ArrayBuffer>('get_widget_asset', { widgetId, path })
 }
+
+export async function startMediaListener(windowLabel: string) {
+  await invoke('start_media_listener', { windowLabel })
+}

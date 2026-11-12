@@ -1,7 +1,7 @@
 use crate::media::MediaListener;
 use parking_lot::{Mutex, RwLock};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::path::PathBuf;
 use sysinfo::System;
 
@@ -18,6 +18,7 @@ pub struct SystemState {
 #[derive(Default)]
 pub struct MediaState {
     pub listener: Mutex<Option<MediaListener>>,
+    pub subscribers: Mutex<HashSet<String>>,
 }
 
 impl SystemState {

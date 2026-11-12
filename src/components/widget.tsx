@@ -3,7 +3,7 @@ import { useParams } from 'react-router'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import { readTextFile } from '@tauri-apps/plugin-fs'
 import { getCurrentWindow } from '@tauri-apps/api/window'
-import { emitTo } from '@tauri-apps/api/event'
+import { emitTo, listen } from '@tauri-apps/api/event'
 import { Button, ToggleButton } from '@heroui/react'
 import { cn } from '@heroui/styles'
 import formatBytes from 'pretty-bytes'
@@ -14,7 +14,7 @@ import preludeScript from '@/scripts/widget-prelude?raw'
 import commonPreludeCss from '@/scripts/common-prelude.css?raw'
 import preludeCss from '@/scripts/widget-prelude.css?raw'
 import type { Options as FormatBytesOptions } from 'pretty-bytes'
-import type { ActiveWidget, Nullable, Widget, RpcRequest, RpcResponse } from '@/types'
+import type { ActiveWidget, Nullable, Widget, RpcRequest, RpcResponse, MediaSessionInfo } from '@/types'
 
 type PathParams = { id: string; instanceId: string }
 
@@ -43,7 +43,7 @@ export function Widget() {
     const key = getWidgetKey(widget.meta.id, widget.instanceId)
 
     await activeWidgetsStore.delete(key)
-    await activeWidgetsStore.save()    
+    await activeWidgetsStore.save()
     currentWindow.close()
   }
 
@@ -101,8 +101,20 @@ export function Widget() {
       }
     }
 
+    const unlisten = listen<MediaSessionInfo>('media-updated', async evt => {
+      const thumbnail = new Uint8Array(evt.payload.thumbnail)
+
+      containerWindow.postMessage({ type: 'MEDIA_UPDATED', payload: { ...evt.payload, thumbnail } }, '*', [
+        thumbnail.buffer,
+      ])
+    })
+
     window.addEventListener('message', handler)
-    return () => window.removeEventListener('message', handler)
+
+    return () => {
+      window.removeEventListener('message', handler)
+      unlisten.then(fn => fn())
+    }
   }, [containerRef, srcDoc, widget])
 
   useEffect(() => {

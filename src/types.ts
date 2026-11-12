@@ -19,6 +19,42 @@ export type ActiveWidget = {
   y: number
 }
 
+export type MediaTimeline = {
+  startMs: number
+  endMs: number
+  positionMs: number
+  canSeek: boolean
+}
+
+export type MediaControls = {
+  canPlay: boolean
+  canPause: boolean
+  canToggle: boolean
+  canNext: boolean
+  canPrev: boolean
+}
+
+export type MediaSessionInfo = {
+  playerId: string
+  playerName: string
+  title: string
+  artist: string
+  album: string
+  isPlaying: boolean
+  isCurrent: boolean
+  thumbnail: number[]
+  controls: MediaControls
+  timeline: Nullable<MediaTimeline>
+}
+
+export type MediaCommand =
+  | { type: 'play' }
+  | { type: 'pause' }
+  | { type: 'toggle' }
+  | { type: 'next' }
+  | { type: 'prev' }
+  | { type: 'seek'; positionMs: number }
+
 export type RpcRequest = {
   type: 'RPC_REQUEST'
   id: string

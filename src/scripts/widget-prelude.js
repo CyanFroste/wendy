@@ -33,6 +33,16 @@ window.widgetApi = (() => {
   }
 
   return {
+    media: {
+      getActiveMedia: () => call('media.get_active_media'),
+      sendCommand: (playerId, command) => call('media.send_command', { playerId, command }),
+
+      onMediaUpdated: callback => {
+        window.addEventListener('message', evt => {
+          if (evt.data.type === 'MEDIA_UPDATED') callback(evt.data.payload)
+        })
+      },
+    },
     system: {
       getCpuInfo: () => call('system.get_cpu_info'),
       getRamInfo: () => call('system.get_ram_info'),

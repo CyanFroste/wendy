@@ -1,5 +1,6 @@
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow'
 import { load as loadStore } from '@tauri-apps/plugin-store'
+import { startMediaListener } from '@/commands'
 import type { ActiveWidget } from '@/types'
 
 export const activeWidgetsStore = await loadStore('active-widgets-store.json', { autoSave: false })
@@ -8,7 +9,7 @@ export function getWidgetKey(id: string, instanceId: string) {
   return `${id}/${instanceId}`
 }
 
-export function createWidgetWindow({ meta, instanceId, isLocked, height, width, x, y, data: _ }: ActiveWidget) {
+export function createWidgetWindow({ meta, instanceId, isLocked, height, width, x, y }: ActiveWidget) {
   const key = getWidgetKey(meta.id, instanceId)
   const url = `/widgets/${key}`
 
@@ -35,6 +36,10 @@ export function createWidgetWindow({ meta, instanceId, isLocked, height, width, 
   window.once('tauri://created', async () => {
     if (import.meta.env.PROD) await window.setAlwaysOnBottom(true)
     await window.show()
+
+    if (meta.permissions.some(it => it.startsWith('media'))) {
+      await startMediaListener(key)
+    }
   })
 
   window.once('tauri://error', err => console.error(err))

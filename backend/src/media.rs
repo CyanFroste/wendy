@@ -52,14 +52,17 @@ pub struct MediaSessionInfo {
 }
 
 #[derive(Deserialize, Debug)]
-#[serde(tag = "type", rename_all = "camelCase")]
+#[serde(tag = "type", rename_all = "kebab-case")]
 pub enum MediaCommand {
     Play,
     Pause,
     Toggle,
     Next,
     Prev,
-    Seek { position_ms: u64 },
+    #[serde(rename_all = "camelCase")]
+    Seek {
+        position_ms: u64,
+    },
 }
 
 /// Trailing-edge debouncer so rapid bursts of WinRT events settle before notifying the UI.
@@ -373,16 +376,17 @@ async fn parse_session(session: &MediaSession, is_current: bool) -> Option<Media
         let start = (tl.StartTime().ok()?.Duration.max(0) / 10_000) as u64;
         let end = (tl.EndTime().ok()?.Duration.max(0) / 10_000) as u64;
         let pos = (tl.Position().ok()?.Duration.max(0) / 10_000) as u64;
+        let can_seek = ctrl.IsPlaybackPositionEnabled().unwrap_or(false);
 
-        if end == 0 {
+        if end == 0 && pos == 0 && !can_seek {
             return None;
         }
 
         Some(MediaTimeline {
             start_ms: start,
-            end_ms: end,
+            end_ms: end.max(pos),
             position_ms: pos,
-            can_seek: ctrl.IsPlaybackPositionEnabled().unwrap_or(false),
+            can_seek,
         })
     });
 

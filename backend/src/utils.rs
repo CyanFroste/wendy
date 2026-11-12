@@ -1,10 +1,11 @@
-use crate::types::{InstalledApp, Widget};
+use crate::types::{InstalledApp, MediaState, Widget};
 use anyhow::Result;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use std::env;
 use std::fs::File;
 use std::path::PathBuf;
+use tauri::{Manager, Window, WindowEvent};
 use walkdir::WalkDir;
 
 pub const RPC_SYSTEM_GET_CPU_INFO: &str = "system.get_cpu_info";
@@ -12,6 +13,8 @@ pub const RPC_SYSTEM_GET_RAM_INFO: &str = "system.get_ram_info";
 pub const RPC_SYSTEM_GET_DISK_INFO: &str = "system.get_disk_info";
 pub const RPC_SYSTEM_GET_INSTALLED_APPS: &str = "system.get_installed_apps";
 pub const RPC_SYSTEM_OPEN_INSTALLED_APP: &str = "system.open_installed_app";
+pub const RPC_MEDIA_GET_ACTIVE_MEDIA: &str = "media.get_active_media";
+pub const RPC_MEDIA_SEND_COMMAND: &str = "media.send_command";
 
 pub fn get_rpc_required_scopes(method: &str) -> Option<&'static [&'static str]> {
     match method {
@@ -20,7 +23,29 @@ pub fn get_rpc_required_scopes(method: &str) -> Option<&'static [&'static str]> 
         RPC_SYSTEM_GET_DISK_INFO => Some(&["system:read"]),
         RPC_SYSTEM_GET_INSTALLED_APPS => Some(&["system:read"]),
         RPC_SYSTEM_OPEN_INSTALLED_APP => Some(&["system:read", "system:exec"]),
+        RPC_MEDIA_GET_ACTIVE_MEDIA => Some(&["media:read"]),
+        RPC_MEDIA_SEND_COMMAND => Some(&["media:read", "media:exec"]),
         _ => None,
+    }
+}
+
+pub fn on_window_event(window: &Window, event: &WindowEvent) {
+    if let WindowEvent::Destroyed = event {
+        let media_state = window.state::<MediaState>();
+        let listener = {
+            let mut subscribers = media_state.subscribers.lock();
+            subscribers.remove(window.label());
+
+            if subscribers.is_empty() {
+                media_state.listener.lock().take()
+            } else {
+                None
+            }
+        };
+
+        if let Some(listener) = listener {
+            tauri::async_runtime::spawn_blocking(move || listener.stop());
+        }
     }
 }
 

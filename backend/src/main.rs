@@ -37,6 +37,7 @@ async fn main() -> Result<()> {
         .manage(cache_state)
         .manage(system_state)
         .manage(media_state)
+        .on_window_event(utils::on_window_event)
         .invoke_handler(tauri::generate_handler![
             commands::widget_rpc,
             commands::get_widgets,
@@ -44,7 +45,6 @@ async fn main() -> Result<()> {
             commands::add_path_to_fs_scope,
             commands::get_widget_asset,
             commands::start_media_listener,
-            commands::stop_media_listener,
         ])
         .run(tauri::generate_context!())?;
 
