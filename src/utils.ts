@@ -1,13 +1,8 @@
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow'
 import { load as loadStore } from '@tauri-apps/plugin-store'
-import { createStore } from 'zustand'
-import type { ActiveWidget, Dictionary } from '@/types'
+import type { ActiveWidget } from '@/types'
 
 export const activeWidgetsStore = await loadStore('active-widgets-store.json', { autoSave: false })
-
-export type WidgetWindowsStore = Dictionary<WebviewWindow>
-
-export const widgetWindowsStore = createStore<WidgetWindowsStore>(() => ({}))
 
 export function getWidgetKey(id: string, instanceId: string) {
   return `${id}/${instanceId}`

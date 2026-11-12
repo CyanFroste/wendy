@@ -35,7 +35,6 @@ export function Widget() {
 
     await activeWidgetsStore.set(key, updated)
     await activeWidgetsStore.save()
-
     setWidget(updated)
   }
 
@@ -44,7 +43,7 @@ export function Widget() {
     const key = getWidgetKey(widget.meta.id, widget.instanceId)
 
     await activeWidgetsStore.delete(key)
-    await activeWidgetsStore.save()
+    await activeWidgetsStore.save()    
     currentWindow.close()
   }
 

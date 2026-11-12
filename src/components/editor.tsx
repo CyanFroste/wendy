@@ -5,7 +5,7 @@ import { convertFileSrc } from '@tauri-apps/api/core'
 import { Button, Separator } from '@heroui/react'
 import { PiArrowClockwise, PiPlus } from 'react-icons/pi'
 import { getWidget, getWidgetAsset, invokeWidgetRpc } from '@/commands'
-import { activeWidgetsStore, createWidgetWindow, extractErrorMessage, getWidgetKey, widgetWindowsStore } from '@/utils'
+import { activeWidgetsStore, createWidgetWindow, extractErrorMessage, getWidgetKey } from '@/utils'
 import { store as settingsStore } from '@/components/settings'
 import preludeScript from '@/scripts/widget-editor-prelude?raw'
 import type { ActiveWidget, Nullable, RpcRequest, RpcResponse, Widget } from '@/types'
@@ -37,8 +37,7 @@ export function Editor() {
     await activeWidgetsStore.set(key, activeWidget)
     await activeWidgetsStore.save()
 
-    const window = createWidgetWindow(activeWidget)
-    widgetWindowsStore.setState(state => ({ ...state, [key]: window }))
+    createWidgetWindow(activeWidget)
   }
 
   const onAction = async () => {

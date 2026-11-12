@@ -4,11 +4,11 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
-use tauri::{AppHandle, Emitter, State as AppState};
 use windows::Foundation::TypedEventHandler;
 use windows::Media::Control::{
     CurrentSessionChangedEventArgs, GlobalSystemMediaTransportControlsSession as MediaSession,
     GlobalSystemMediaTransportControlsSessionManager as MediaSessionManager,
+    GlobalSystemMediaTransportControlsSessionMediaProperties as MediaProperties,
     GlobalSystemMediaTransportControlsSessionPlaybackStatus as PlaybackStatus,
     MediaPropertiesChangedEventArgs, PlaybackInfoChangedEventArgs, SessionsChangedEventArgs,
     TimelinePropertiesChangedEventArgs,
@@ -66,32 +66,39 @@ pub enum MediaCommand {
 #[derive(Clone)]
 struct TrailingDebouncer {
     pending: Arc<Mutex<bool>>,
+    rt: tokio::runtime::Handle,
+    on_emit: Arc<dyn Fn() + Send + Sync>,
 }
 
 impl TrailingDebouncer {
-    fn new() -> Self {
+    fn new<F>(on_emit: F) -> Self
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
         Self {
             pending: Arc::new(Mutex::new(false)),
+            rt: tokio::runtime::Handle::current(),
+            on_emit: Arc::new(on_emit),
         }
     }
 
-    fn trigger(&self, app: AppHandle) {
+    fn trigger(&self) {
         let mut pending = self.pending.lock();
-
         if *pending {
-            return; // timer already scheduled, it will fire after the burst settles
+            return;
         }
 
         *pending = true;
         drop(pending);
 
         let pending = Arc::clone(&self.pending);
+        let on_emit = Arc::clone(&self.on_emit);
 
-        tauri::async_runtime::spawn(async move {
+        self.rt.spawn(async move {
             tokio::time::sleep(Duration::from_millis(200)).await;
 
             *pending.lock() = false;
-            let _ = app.emit("media_updated", ());
+            on_emit();
         });
     }
 }
@@ -103,49 +110,50 @@ struct SessionEntry {
     timeline_token: i64,
 }
 
-pub struct WinMediaListener {
+pub struct MediaListener {
     manager: MediaSessionManager,
     sessions_changed_token: i64,
     current_changed_token: i64,
     sessions: Arc<Mutex<HashMap<String, SessionEntry>>>,
 }
 
-impl WinMediaListener {
-    pub async fn start(app: AppHandle) -> Result<Self> {
+impl MediaListener {
+    pub async fn start<F>(on_update: F) -> Result<Self>
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
         let manager = MediaSessionManager::RequestAsync()?.await?;
-        let debouncer = TrailingDebouncer::new();
+        let debouncer = TrailingDebouncer::new(on_update);
         let sessions: Arc<Mutex<HashMap<String, SessionEntry>>> =
             Arc::new(Mutex::new(HashMap::new()));
 
-        // 1. Listen for new or closed media sessions
-        let d1 = debouncer.clone();
-        let a1 = app.clone();
-        let s1 = Arc::clone(&sessions);
+        // listen for new or closed media sessions
+        let debouncer_clone = debouncer.clone();
+        let sessions_clone = Arc::clone(&sessions);
         let sessions_changed_token = manager.SessionsChanged(&TypedEventHandler::<
             MediaSessionManager,
             SessionsChangedEventArgs,
         >::new(move |mgr, _| {
             if let Some(mgr) = mgr.as_ref() {
-                sync_sessions(mgr, &a1, &d1, &mut s1.lock());
+                sync_sessions(mgr, &debouncer_clone, &mut sessions_clone.lock());
             }
-            d1.trigger(a1.clone());
+            debouncer_clone.trigger();
             Ok(())
         }))?;
 
-        // 2. Listen for active session switches (e.g., pausing Spotify and playing YouTube)
-        let d2 = debouncer.clone();
-        let a2 = app.clone();
+        // listen for active session switches (e.g., pausing Spotify and playing YouTube)
+        let debouncer_clone = debouncer.clone();
         let current_changed_token =
             manager.CurrentSessionChanged(&TypedEventHandler::<
                 MediaSessionManager,
                 CurrentSessionChangedEventArgs,
             >::new(move |_, _| {
-                d2.trigger(a2.clone());
+                debouncer_clone.trigger();
                 Ok(())
             }))?;
 
-        // 3. Attach listeners to already-open sessions
-        sync_sessions(&manager, &app, &debouncer, &mut sessions.lock());
+        // attach listeners to already-open sessions
+        sync_sessions(&manager, &debouncer, &mut sessions.lock());
 
         Ok(Self {
             manager,
@@ -179,7 +187,6 @@ impl WinMediaListener {
 
 fn sync_sessions(
     manager: &MediaSessionManager,
-    app: &AppHandle,
     debouncer: &TrailingDebouncer,
     map: &mut HashMap<String, SessionEntry>,
 ) {
@@ -193,6 +200,7 @@ fn sync_sessions(
         let Ok(id_hstr) = session.SourceAppUserModelId() else {
             continue;
         };
+
         let id = id_hstr.to_string();
         active_ids.insert(id.clone());
 
@@ -200,38 +208,35 @@ fn sync_sessions(
             continue;
         }
 
-        let d_meta = debouncer.clone();
-        let a_meta = app.clone();
+        let debouncer_clone = debouncer.clone();
         let Ok(metadata_token) = session.MediaPropertiesChanged(&TypedEventHandler::<
             MediaSession,
             MediaPropertiesChangedEventArgs,
         >::new(move |_, _| {
-            d_meta.trigger(a_meta.clone());
+            debouncer_clone.trigger();
             Ok(())
         })) else {
             continue;
         };
 
-        let d_play = debouncer.clone();
-        let a_play = app.clone();
+        let debouncer_clone = debouncer.clone();
         let Ok(playback_token) = session.PlaybackInfoChanged(&TypedEventHandler::<
             MediaSession,
             PlaybackInfoChangedEventArgs,
         >::new(move |_, _| {
-            d_play.trigger(a_play.clone());
+            debouncer_clone.trigger();
             Ok(())
         })) else {
             let _ = session.RemoveMediaPropertiesChanged(metadata_token);
             continue;
         };
 
-        let d_time = debouncer.clone();
-        let a_time = app.clone();
+        let debouncer_clone = debouncer.clone();
         let Ok(timeline_token) = session.TimelinePropertiesChanged(&TypedEventHandler::<
             MediaSession,
             TimelinePropertiesChangedEventArgs,
         >::new(move |_, _| {
-            d_time.trigger(a_time.clone());
+            debouncer_clone.trigger();
             Ok(())
         })) else {
             let _ = session.RemoveMediaPropertiesChanged(metadata_token);
@@ -250,7 +255,7 @@ fn sync_sessions(
         );
     }
 
-    // Remove stale sessions that have closed
+    // remove stale sessions that have closed
     let stale: Vec<String> = map
         .keys()
         .filter(|id| !active_ids.contains(*id))
@@ -310,9 +315,7 @@ async fn resolve_player_name(app_id: &str) -> String {
     }
 }
 
-async fn read_thumbnail(
-    props: &windows::Media::Control::GlobalSystemMediaTransportControlsSessionMediaProperties,
-) -> Vec<u8> {
+async fn read_thumbnail(props: &MediaProperties) -> Vec<u8> {
     let Ok(thumb_ref) = props.Thumbnail() else {
         return Vec::new();
     };
@@ -322,6 +325,7 @@ async fn read_thumbnail(
     let Ok(size) = stream.Size() else {
         return Vec::new();
     };
+
     if size == 0 || size > 10_000_000 {
         return Vec::new();
     }
@@ -330,6 +334,7 @@ async fn read_thumbnail(
     let Ok(buffer) = Buffer::Create(len) else {
         return Vec::new();
     };
+
     if async {
         stream
             .ReadAsync(&buffer, len, InputStreamOptions::ReadAhead)?
@@ -345,9 +350,11 @@ async fn read_thumbnail(
         return Vec::new();
     };
     let mut bytes = vec![0u8; len as usize];
+
     if reader.ReadBytes(&mut bytes).is_err() {
         return Vec::new();
     }
+
     bytes
 }
 
@@ -366,9 +373,11 @@ async fn parse_session(session: &MediaSession, is_current: bool) -> Option<Media
         let start = (tl.StartTime().ok()?.Duration.max(0) / 10_000) as u64;
         let end = (tl.EndTime().ok()?.Duration.max(0) / 10_000) as u64;
         let pos = (tl.Position().ok()?.Duration.max(0) / 10_000) as u64;
+
         if end == 0 {
             return None;
         }
+
         Some(MediaTimeline {
             start_ms: start,
             end_ms: end,
@@ -400,7 +409,7 @@ async fn parse_session(session: &MediaSession, is_current: bool) -> Option<Media
     })
 }
 
-pub async fn fetch_active_media() -> Result<Option<MediaSessionInfo>> {
+pub async fn get_active_media() -> Result<Option<MediaSessionInfo>> {
     let manager = MediaSessionManager::RequestAsync()?.await?;
 
     if let Ok(current) = manager.GetCurrentSession() {
@@ -420,7 +429,7 @@ pub async fn fetch_active_media() -> Result<Option<MediaSessionInfo>> {
     Ok(None)
 }
 
-pub async fn send_command(player_id: String, cmd: MediaCommand) -> Result<()> {
+pub async fn send_media_command(player_id: String, cmd: MediaCommand) -> Result<()> {
     let manager = MediaSessionManager::RequestAsync()?.await?;
 
     let session = manager
@@ -452,65 +461,10 @@ pub async fn send_command(player_id: String, cmd: MediaCommand) -> Result<()> {
         }
         MediaCommand::Seek { position_ms } => {
             let ticks = (Duration::from_millis(position_ms).as_nanos() / 100) as i64;
+
             session.TryChangePlaybackPositionAsync(ticks)?.await?;
         }
     }
-
-    Ok(())
-}
-
-#[derive(Default)]
-pub struct MediaState {
-    listener: Mutex<Option<WinMediaListener>>,
-}
-
-#[tauri::command]
-pub async fn start_media_listener(
-    app: AppHandle,
-    state: AppState<'_, MediaState>,
-) -> Result<(), crate::types::Error> {
-    if state.listener.lock().is_some() {
-        return Ok(());
-    }
-
-    let listener = WinMediaListener::start(app).await?;
-    let mut guard = state.listener.lock();
-
-    if guard.is_none() {
-        *guard = Some(listener);
-    } else {
-        listener.stop();
-    }
-
-    Ok(())
-}
-
-#[tauri::command]
-pub async fn stop_media_listener(
-    state: AppState<'_, MediaState>,
-) -> Result<(), crate::types::Error> {
-    if let Some(listener) = state.listener.lock().take() {
-        tokio::task::spawn_blocking(move || listener.stop())
-            .await
-            .map_err(crate::types::Error::from_error)?;
-    }
-
-    Ok(())
-}
-
-#[tauri::command]
-pub async fn get_active_media() -> Result<Option<MediaSessionInfo>, crate::types::Error> {
-    let res = fetch_active_media().await?;
-
-    Ok(res)
-}
-
-#[tauri::command]
-pub async fn send_media_command(
-    player_id: String,
-    command: MediaCommand,
-) -> Result<(), crate::types::Error> {
-    send_command(player_id, command).await?;
 
     Ok(())
 }

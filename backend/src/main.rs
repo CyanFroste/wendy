@@ -8,7 +8,7 @@ mod utils;
 
 use anyhow::Result;
 use sysinfo::{CpuRefreshKind, MemoryRefreshKind, RefreshKind, System};
-use types::State;
+use types::{CacheState, MediaState, SystemState};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -21,9 +21,11 @@ async fn main() -> Result<()> {
     system.refresh_cpu_all();
     system.refresh_memory();
 
-    let mut state = State::new(system);
+    let system_state = SystemState::new(system);
+    let media_state = MediaState::default();
+    let mut cache_state = CacheState::default();
 
-    state.installed_apps = utils::get_installed_apps().await?;
+    cache_state.installed_apps = utils::get_installed_apps().await?;
 
     tauri::Builder::default()
         .plugin(tauri_plugin_store::Builder::new().build())
@@ -32,13 +34,17 @@ async fn main() -> Result<()> {
         .plugin(tauri_plugin_persisted_scope::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_wallpaper::init())
-        .manage(state)
+        .manage(cache_state)
+        .manage(system_state)
+        .manage(media_state)
         .invoke_handler(tauri::generate_handler![
             commands::widget_rpc,
             commands::get_widgets,
             commands::get_widget,
             commands::add_path_to_fs_scope,
             commands::get_widget_asset,
+            commands::start_media_listener,
+            commands::stop_media_listener,
         ])
         .run(tauri::generate_context!())?;
 

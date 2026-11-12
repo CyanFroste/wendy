@@ -5,6 +5,7 @@ import ReactDOM from 'react-dom/client'
 import { createBrowserRouter, RouterProvider } from 'react-router'
 import {
   getCurrentWindow,
+  getAllWindows,
   // currentMonitor as getCurrentMonitor,
   // PhysicalPosition,
   // PhysicalSize,
@@ -19,7 +20,6 @@ import { Picker } from '@/components/picker'
 import { Editor } from '@/components/editor'
 import { Widget } from '@/components/widget'
 import { activeWidgetsStore, createWidgetWindow } from '@/utils'
-import { widgetWindowsStore } from '@/utils'
 import type { ActiveWidget } from '@/types'
 
 // await attachWindowAsWallpaper('main')
@@ -47,14 +47,12 @@ ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
 )
 
 if (currentWindow.label === 'main' && window.location.pathname === '/') {
-  for (const [key, widget] of await activeWidgetsStore.entries<ActiveWidget>()) {
-    const window = createWidgetWindow(widget)
-
-    widgetWindowsStore.setState(state => ({ ...state, [key]: window }))
+  for (const widget of await activeWidgetsStore.values<ActiveWidget>()) {
+    createWidgetWindow(widget)
   }
 
   currentWindow.onCloseRequested(async () => {
-    const windows = Object.values(widgetWindowsStore.getState())
+    const windows = (await getAllWindows()).filter(w => w.label !== 'main')
     if (!windows.length) return
 
     await activeWidgetsStore.reload()

@@ -1,21 +1,28 @@
+use crate::media::MediaListener;
 use parking_lot::{Mutex, RwLock};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use sysinfo::System;
 
-#[derive(Debug)]
-pub struct State {
+#[derive(Default)]
+pub struct CacheState {
     pub widgets_cache: RwLock<BTreeMap<String, Widget>>,
     pub installed_apps: Vec<InstalledApp>,
+}
+
+pub struct SystemState {
     pub system: Mutex<System>,
 }
 
-impl State {
+#[derive(Default)]
+pub struct MediaState {
+    pub listener: Mutex<Option<MediaListener>>,
+}
+
+impl SystemState {
     pub fn new(system: System) -> Self {
         Self {
-            widgets_cache: RwLock::new(BTreeMap::new()),
-            installed_apps: Vec::new(),
             system: Mutex::new(system),
         }
     }

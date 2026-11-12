@@ -1,4 +1,7 @@
-use crate::types::{CpuInfo, DiskInfo, Error, RamInfo, State, Widget};
+use crate::media::{MediaCommand, MediaListener, get_active_media, send_media_command};
+use crate::types::{
+    CacheState, CpuInfo, DiskInfo, Error, MediaState, RamInfo, SystemState, Widget,
+};
 use crate::utils;
 use crate::utils::{
     RPC_SYSTEM_GET_CPU_INFO, RPC_SYSTEM_GET_DISK_INFO, RPC_SYSTEM_GET_INSTALLED_APPS,
@@ -9,19 +12,53 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 use sysinfo::Disks;
-use tauri::AppHandle;
 use tauri::State as AppState;
 use tauri::ipc::Response;
+use tauri::{AppHandle, Emitter};
 use tauri_plugin_fs::FsExt;
 
 #[tauri::command]
+pub async fn start_media_listener(
+    app: AppHandle,
+    media_state: AppState<'_, MediaState>,
+) -> Result<(), Error> {
+    if media_state.listener.lock().is_some() {
+        return Ok(());
+    }
+
+    let listener = MediaListener::start(move || {
+        let _ = app.emit("media_updated", ());
+    })
+    .await?;
+
+    let mut guard = media_state.listener.lock();
+    if guard.is_none() {
+        *guard = Some(listener);
+    } else {
+        listener.stop();
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn stop_media_listener(state: AppState<'_, MediaState>) -> Result<(), Error> {
+    if let Some(listener) = state.listener.lock().take() {
+        listener.stop();
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn widget_rpc(
-    state: AppState<State, '_>,
+    cache_state: AppState<CacheState, '_>,
+    system_state: AppState<SystemState, '_>,
     widget_id: String,
     method: String,
     params: JsonValue,
 ) -> Result<JsonValue, Error> {
-    let widget = state
+    let widget = cache_state
         .widgets_cache
         .read()
         .get(&widget_id)
@@ -36,8 +73,29 @@ pub async fn widget_rpc(
     }
 
     match method.as_str() {
+        "media.get_active_media" => {
+            let rt = tokio::runtime::Handle::current();
+            let data = tokio::task::spawn_blocking(move || rt.block_on(get_active_media()))
+                .await
+                .map_err(Error::from_error)??;
+
+            Ok(serde_json::to_value(&data)?)
+        }
+
+        "media.send_command" => {
+            let player_id = params["playerId"]
+                .as_str()
+                .ok_or_else(|| Error::new("missing parameter 'playerId'"))?
+                .to_string();
+            let command: MediaCommand = serde_json::from_value(params["command"].clone())?;
+
+            send_media_command(player_id, command).await?;
+
+            Ok(JsonValue::Null)
+        }
+
         RPC_SYSTEM_GET_CPU_INFO => {
-            let mut system = state.system.lock();
+            let mut system = system_state.system.lock();
 
             system.refresh_cpu_all();
 
@@ -56,7 +114,7 @@ pub async fn widget_rpc(
         }
 
         RPC_SYSTEM_GET_RAM_INFO => {
-            let mut system = state.system.lock();
+            let mut system = system_state.system.lock();
 
             system.refresh_memory();
 
@@ -88,7 +146,7 @@ pub async fn widget_rpc(
             Ok(serde_json::to_value(&data)?)
         }
 
-        RPC_SYSTEM_GET_INSTALLED_APPS => Ok(serde_json::to_value(&state.installed_apps)?),
+        RPC_SYSTEM_GET_INSTALLED_APPS => Ok(serde_json::to_value(&cache_state.installed_apps)?),
 
         RPC_SYSTEM_OPEN_INSTALLED_APP => {
             let path = params["path"]
@@ -96,7 +154,7 @@ pub async fn widget_rpc(
                 .ok_or_else(|| Error::new("missing parameter 'path'"))?;
             let path = PathBuf::from(path);
 
-            if !state.installed_apps.iter().any(|x| x.path == path) {
+            if !cache_state.installed_apps.iter().any(|x| x.path == path) {
                 return Err(Error::new("invalid application path"));
             }
 
@@ -112,12 +170,12 @@ pub async fn widget_rpc(
 
 #[tauri::command]
 pub async fn get_widget_asset(
-    state: AppState<State, '_>,
+    cache_state: AppState<CacheState, '_>,
     widget_id: String,
     path: String,
 ) -> Result<Response, Error> {
     // only getting for widgets from cache for now
-    let Some(widget_path) = state
+    let Some(widget_path) = cache_state
         .widgets_cache
         .read()
         .get(&widget_id)
@@ -148,11 +206,11 @@ pub async fn get_widget_asset(
 
 #[tauri::command]
 pub fn get_widgets(
-    state: AppState<State, '_>,
+    cache_state: AppState<CacheState, '_>,
     widgets_path: PathBuf,
     refetch: bool,
 ) -> Result<Vec<Widget>, Error> {
-    let guard = state.widgets_cache.read();
+    let guard = cache_state.widgets_cache.read();
 
     if !refetch && !guard.is_empty() {
         return Ok(guard.values().cloned().collect());
@@ -162,18 +220,19 @@ pub fn get_widgets(
 
     let widgets = utils::get_widgets(widgets_path)?;
 
-    *state.widgets_cache.write() = widgets.iter().map(|x| (x.id.clone(), x.clone())).collect();
+    *cache_state.widgets_cache.write() =
+        widgets.iter().map(|x| (x.id.clone(), x.clone())).collect();
 
     Ok(widgets)
 }
 
 #[tauri::command]
 pub fn get_widget(
-    state: AppState<State, '_>,
+    cache_state: AppState<CacheState, '_>,
     widgets_path: PathBuf,
     id: String,
 ) -> Result<Option<Widget>, Error> {
-    let guard = state.widgets_cache.read();
+    let guard = cache_state.widgets_cache.read();
 
     if !guard.is_empty() {
         return Ok(guard.get(&id).cloned());
@@ -193,7 +252,7 @@ pub fn get_widget(
         map.insert(it.id.clone(), it);
     }
 
-    *state.widgets_cache.write() = map;
+    *cache_state.widgets_cache.write() = map;
 
     Ok(widget)
 }
