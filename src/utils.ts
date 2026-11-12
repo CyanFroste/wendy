@@ -1,6 +1,6 @@
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow'
 import { load as loadStore } from '@tauri-apps/plugin-store'
-import { startMediaListener } from '@/commands'
+import { startAudioCapture, startMediaListener } from '@/commands'
 import type { ActiveWidget } from '@/types'
 
 export const activeWidgetsStore = await loadStore('active-widgets-store.json', { autoSave: false })
@@ -37,8 +37,12 @@ export function createWidgetWindow({ meta, instanceId, isLocked, height, width, 
     if (import.meta.env.PROD) await window.setAlwaysOnBottom(true)
     await window.show()
 
-    if (meta.permissions.some(it => it.startsWith('media'))) {
+    if (meta.permissions.some(it => it === 'media:read')) {
       await startMediaListener(key)
+    }
+
+    if (meta.permissions.some(it => it === 'audio:read')) {
+      await startAudioCapture(key)
     }
   })
 

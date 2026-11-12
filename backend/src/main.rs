@@ -1,12 +1,14 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod audio;
 mod commands;
 mod media;
 mod types;
 mod utils;
 
 use anyhow::Result;
+use audio::AudioState;
 use sysinfo::{CpuRefreshKind, MemoryRefreshKind, RefreshKind, System};
 use types::{CacheState, MediaState, SystemState};
 
@@ -23,6 +25,7 @@ async fn main() -> Result<()> {
 
     let system_state = SystemState::new(system);
     let media_state = MediaState::default();
+    let audio_state = AudioState::new();
     let mut cache_state = CacheState::default();
 
     cache_state.installed_apps = utils::get_installed_apps().await?;
@@ -37,6 +40,7 @@ async fn main() -> Result<()> {
         .manage(cache_state)
         .manage(system_state)
         .manage(media_state)
+        .manage(audio_state)
         .on_window_event(utils::on_window_event)
         .invoke_handler(tauri::generate_handler![
             commands::widget_rpc,
@@ -45,6 +49,7 @@ async fn main() -> Result<()> {
             commands::add_path_to_fs_scope,
             commands::get_widget_asset,
             commands::start_media_listener,
+            commands::start_audio_capture,
         ])
         .run(tauri::generate_context!())?;
 

@@ -24,3 +24,7 @@ export async function getWidgetAsset(widgetId: string, path: string) {
 export async function startMediaListener(windowLabel: string) {
   await invoke('start_media_listener', { windowLabel })
 }
+
+export async function startAudioCapture(windowLabel: string) {
+  await invoke('start_audio_capture', { windowLabel })
+}

@@ -1,3 +1,4 @@
+use crate::audio::AudioState;
 use crate::types::{InstalledApp, MediaState, Widget};
 use anyhow::Result;
 use base64::Engine;
@@ -46,6 +47,10 @@ pub fn on_window_event(window: &Window, event: &WindowEvent) {
         if let Some(listener) = listener {
             tauri::async_runtime::spawn_blocking(move || listener.stop());
         }
+
+        window
+            .state::<AudioState>()
+            .remove_subscriber(window.label());
     }
 }
 

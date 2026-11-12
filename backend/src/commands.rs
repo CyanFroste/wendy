@@ -1,3 +1,4 @@
+use crate::audio::AudioState;
 use crate::media::{MediaCommand, MediaListener, get_active_media, send_media_command};
 use crate::types::{
     CacheState, CpuInfo, DiskInfo, Error, MediaState, RamInfo, SystemState, Widget,
@@ -16,6 +17,29 @@ use sysinfo::Disks;
 use tauri::ipc::Response;
 use tauri::{AppHandle, Emitter, Manager, State as AppState};
 use tauri_plugin_fs::FsExt;
+
+#[tauri::command]
+pub fn start_audio_capture(
+    app_handle: AppHandle,
+    audio_state: AppState<'_, AudioState>,
+    window_label: String,
+) {
+    let app_handle = app_handle.clone();
+
+    audio_state.start(window_label, move |chunk| {
+        let subs: Vec<String> = app_handle
+            .state::<AudioState>()
+            .subscribers
+            .lock()
+            .iter()
+            .cloned()
+            .collect();
+
+        for label in subs {
+            let _ = app_handle.emit_to(&label, "audio-captured", &chunk);
+        }
+    });
+}
 
 #[tauri::command]
 pub async fn start_media_listener(

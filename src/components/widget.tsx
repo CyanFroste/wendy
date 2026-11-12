@@ -101,7 +101,7 @@ export function Widget() {
       }
     }
 
-    const unlisten = listen<MediaSessionInfo>('media-updated', async evt => {
+    const mediaUpdatedListener = listen<MediaSessionInfo>('media-updated', async evt => {
       const thumbnail = new Uint8Array(evt.payload.thumbnail)
 
       containerWindow.postMessage({ type: 'MEDIA_UPDATED', payload: { ...evt.payload, thumbnail } }, '*', [
@@ -109,11 +109,18 @@ export function Widget() {
       ])
     })
 
+    const audioCapturedListener = listen<number[]>('audio-captured', async evt => {
+      const samples = new Float32Array(evt.payload)
+
+      containerWindow.postMessage({ type: 'AUDIO_CAPTURED', payload: samples }, '*', [samples.buffer])
+    })
+
     window.addEventListener('message', handler)
 
     return () => {
       window.removeEventListener('message', handler)
-      unlisten.then(fn => fn())
+      mediaUpdatedListener.then(fn => fn())
+      audioCapturedListener.then(fn => fn())
     }
   }, [containerRef, srcDoc, widget])
 

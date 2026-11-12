@@ -33,6 +33,13 @@ window.widgetApi = (() => {
   }
 
   return {
+    audio: {
+      onAudioCaptured: callback => {
+        window.addEventListener('message', evt => {
+          if (evt.data.type === 'AUDIO_CAPTURED') callback(evt.data.payload)
+        })
+      },
+    },
     media: {
       getActiveMedia: () => call('media.get_active_media'),
       sendCommand: (playerId, command) => call('media.send_command', { playerId, command }),
