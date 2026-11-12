@@ -3,29 +3,43 @@ use crate::types::{InstalledApp, MediaState, Widget};
 use anyhow::Result;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64;
-use std::env;
 use std::fs::File;
 use std::path::PathBuf;
+use std::{env, fs};
 use tauri::{Manager, Window, WindowEvent};
 use walkdir::WalkDir;
 
-pub const RPC_SYSTEM_GET_CPU_INFO: &str = "system.get_cpu_info";
-pub const RPC_SYSTEM_GET_RAM_INFO: &str = "system.get_ram_info";
-pub const RPC_SYSTEM_GET_DISK_INFO: &str = "system.get_disk_info";
-pub const RPC_SYSTEM_GET_INSTALLED_APPS: &str = "system.get_installed_apps";
-pub const RPC_SYSTEM_OPEN_INSTALLED_APP: &str = "system.open_installed_app";
-pub const RPC_MEDIA_GET_ACTIVE_MEDIA: &str = "media.get_active_media";
-pub const RPC_MEDIA_SEND_COMMAND: &str = "media.send_command";
+pub mod constants {
+    pub const RPC_SYSTEM_GET_CPU_INFO: &str = "system.get_cpu_info";
+    pub const RPC_SYSTEM_GET_RAM_INFO: &str = "system.get_ram_info";
+    pub const RPC_SYSTEM_GET_DISK_INFO: &str = "system.get_disk_info";
+    pub const RPC_SYSTEM_GET_INSTALLED_APPS: &str = "system.get_installed_apps";
+    pub const RPC_SYSTEM_OPEN_INSTALLED_APP: &str = "system.open_installed_app";
+    pub const RPC_MEDIA_GET_ACTIVE_MEDIA: &str = "media.get_active_media";
+    pub const RPC_MEDIA_SEND_COMMAND: &str = "media.send_command";
+    pub const RPC_AUDIO_GET_MASTER_VOLUME: &str = "audio.get_master_volume";
+    pub const RPC_AUDIO_SET_MASTER_VOLUME: &str = "audio.set_master_volume";
+    pub const RPC_AUDIO_TOGGLE_MASTER_MUTE: &str = "audio.toggle_master_mute";
+    pub const RPC_SYSTEM_OPEN_RECYCLE_BIN: &str = "system.open_recycle_bin";
+    pub const RPC_SYSTEM_GET_RECYCLE_BIN_COUNT: &str = "system.get_recycle_bin_count";
+}
 
 pub fn get_rpc_required_scopes(method: &str) -> Option<&'static [&'static str]> {
+    use constants::*;
+
     match method {
         RPC_SYSTEM_GET_CPU_INFO => Some(&["system:read"]),
         RPC_SYSTEM_GET_RAM_INFO => Some(&["system:read"]),
         RPC_SYSTEM_GET_DISK_INFO => Some(&["system:read"]),
         RPC_SYSTEM_GET_INSTALLED_APPS => Some(&["system:read"]),
-        RPC_SYSTEM_OPEN_INSTALLED_APP => Some(&["system:read", "system:exec"]),
+        RPC_SYSTEM_OPEN_INSTALLED_APP => Some(&["system:exec"]),
         RPC_MEDIA_GET_ACTIVE_MEDIA => Some(&["media:read"]),
-        RPC_MEDIA_SEND_COMMAND => Some(&["media:read", "media:exec"]),
+        RPC_MEDIA_SEND_COMMAND => Some(&["media:exec"]),
+        RPC_AUDIO_GET_MASTER_VOLUME => Some(&["audio:read"]),
+        RPC_AUDIO_SET_MASTER_VOLUME => Some(&["audio:write"]),
+        RPC_AUDIO_TOGGLE_MASTER_MUTE => Some(&["audio:write"]),
+        RPC_SYSTEM_OPEN_RECYCLE_BIN => Some(&["system:exec"]),
+        RPC_SYSTEM_GET_RECYCLE_BIN_COUNT => Some(&["system:read"]),
         _ => None,
     }
 }
@@ -130,4 +144,35 @@ pub fn get_widgets(widgets_path: PathBuf) -> Result<Vec<Widget>> {
     }
 
     Ok(widgets)
+}
+
+pub fn get_recycle_bin_count() -> usize {
+    let mut count: usize = 0;
+
+    for drive in b'A'..=b'Z' {
+        let bin_root = PathBuf::from(format!("{}:\\$Recycle.Bin", drive as char));
+        let Ok(sid_dirs) = fs::read_dir(bin_root) else {
+            continue;
+        };
+
+        for sid in sid_dirs.flatten() {
+            let sid_path = sid.path();
+            let Ok(entries) = fs::read_dir(&sid_path) else {
+                continue;
+            };
+
+            count += entries
+                .flatten()
+                .filter(|entry| {
+                    entry
+                        .file_name()
+                        .to_str()
+                        .and_then(|n| n.strip_prefix("$I"))
+                        .is_some_and(|suffix| sid_path.join(format!("$R{suffix}")).exists())
+                })
+                .count();
+        }
+    }
+
+    count
 }

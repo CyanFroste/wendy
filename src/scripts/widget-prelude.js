@@ -34,6 +34,10 @@ window.widgetApi = (() => {
 
   return {
     audio: {
+      getMasterVolume: () => call('audio.get_master_volume'),
+      setMasterVolume: level => call('audio.set_master_volume', { level }),
+      toggleMasterMute: () => call('audio.toggle_master_mute'),
+
       onAudioCaptured: callback => {
         window.addEventListener('message', evt => {
           if (evt.data.type === 'AUDIO_CAPTURED') callback(evt.data.payload)
@@ -56,6 +60,8 @@ window.widgetApi = (() => {
       getDiskInfo: () => call('system.get_disk_info'),
       getInstalledApps: () => call('system.get_installed_apps'),
       openInstalledApp: path => call('system.open_installed_app', { path }),
+      openRecycleBin: () => call('system.open_recycle_bin'),
+      getRecycleBinCount: () => call('system.get_recycle_bin_count'),
     },
     utils: {
       getAssetUrl: path => call('utils.get_asset_url', { path }),

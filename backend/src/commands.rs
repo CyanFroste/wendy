@@ -1,14 +1,11 @@
 use crate::audio::AudioState;
+use crate::audio::volume_controls;
 use crate::media::{MediaCommand, MediaListener, get_active_media, send_media_command};
 use crate::types::{
     CacheState, CpuInfo, DiskInfo, Error, MediaState, RamInfo, SystemState, Widget,
 };
 use crate::utils;
-use crate::utils::{
-    RPC_MEDIA_GET_ACTIVE_MEDIA, RPC_MEDIA_SEND_COMMAND, RPC_SYSTEM_GET_CPU_INFO,
-    RPC_SYSTEM_GET_DISK_INFO, RPC_SYSTEM_GET_INSTALLED_APPS, RPC_SYSTEM_GET_RAM_INFO,
-    RPC_SYSTEM_OPEN_INSTALLED_APP,
-};
+use crate::utils::constants;
 use serde_json::Value as JsonValue;
 use std::collections::BTreeMap;
 use std::fs;
@@ -126,7 +123,50 @@ pub async fn widget_rpc(
     }
 
     match method.as_str() {
-        RPC_MEDIA_GET_ACTIVE_MEDIA => {
+        constants::RPC_SYSTEM_GET_RECYCLE_BIN_COUNT => {
+            let count = tokio::task::spawn_blocking(utils::get_recycle_bin_count)
+                .await
+                .map_err(Error::from_error)?;
+
+            Ok(JsonValue::Number(count.into()))
+        }
+
+        constants::RPC_SYSTEM_OPEN_RECYCLE_BIN => {
+            open::that_detached("shell:RecycleBinFolder")?;
+
+            Ok(JsonValue::Null)
+        }
+
+        constants::RPC_AUDIO_GET_MASTER_VOLUME => {
+            let data = tokio::task::spawn_blocking(volume_controls::get_volume)
+                .await
+                .map_err(Error::from_error)??;
+
+            Ok(serde_json::to_value(&data)?)
+        }
+
+        constants::RPC_AUDIO_SET_MASTER_VOLUME => {
+            let level = params["level"]
+                .as_f64()
+                .ok_or_else(|| Error::new("missing parameter 'level'"))?;
+            let level = level.clamp(0.0, 1.0) as f32;
+
+            let data = tokio::task::spawn_blocking(move || volume_controls::set_volume(level))
+                .await
+                .map_err(Error::from_error)??;
+
+            Ok(serde_json::to_value(&data)?)
+        }
+
+        constants::RPC_AUDIO_TOGGLE_MASTER_MUTE => {
+            let data = tokio::task::spawn_blocking(volume_controls::toggle_mute)
+                .await
+                .map_err(Error::from_error)??;
+
+            Ok(serde_json::to_value(&data)?)
+        }
+
+        constants::RPC_MEDIA_GET_ACTIVE_MEDIA => {
             let rt = tokio::runtime::Handle::current();
             let data = tokio::task::spawn_blocking(move || rt.block_on(get_active_media()))
                 .await
@@ -135,7 +175,7 @@ pub async fn widget_rpc(
             Ok(serde_json::to_value(&data)?)
         }
 
-        RPC_MEDIA_SEND_COMMAND => {
+        constants::RPC_MEDIA_SEND_COMMAND => {
             let player_id = params["playerId"]
                 .as_str()
                 .ok_or_else(|| Error::new("missing parameter 'playerId'"))?
@@ -147,7 +187,7 @@ pub async fn widget_rpc(
             Ok(JsonValue::Null)
         }
 
-        RPC_SYSTEM_GET_CPU_INFO => {
+        constants::RPC_SYSTEM_GET_CPU_INFO => {
             let mut system = system_state.system.lock();
 
             system.refresh_cpu_all();
@@ -166,7 +206,7 @@ pub async fn widget_rpc(
             Ok(serde_json::to_value(&data)?)
         }
 
-        RPC_SYSTEM_GET_RAM_INFO => {
+        constants::RPC_SYSTEM_GET_RAM_INFO => {
             let mut system = system_state.system.lock();
 
             system.refresh_memory();
@@ -182,7 +222,7 @@ pub async fn widget_rpc(
             Ok(serde_json::to_value(&data)?)
         }
 
-        RPC_SYSTEM_GET_DISK_INFO => {
+        constants::RPC_SYSTEM_GET_DISK_INFO => {
             let disks = Disks::new_with_refreshed_list()?;
             let data: Vec<DiskInfo> = disks
                 .iter()
@@ -199,9 +239,11 @@ pub async fn widget_rpc(
             Ok(serde_json::to_value(&data)?)
         }
 
-        RPC_SYSTEM_GET_INSTALLED_APPS => Ok(serde_json::to_value(&cache_state.installed_apps)?),
+        constants::RPC_SYSTEM_GET_INSTALLED_APPS => {
+            Ok(serde_json::to_value(&cache_state.installed_apps)?)
+        }
 
-        RPC_SYSTEM_OPEN_INSTALLED_APP => {
+        constants::RPC_SYSTEM_OPEN_INSTALLED_APP => {
             let path = params["path"]
                 .as_str()
                 .ok_or_else(|| Error::new("missing parameter 'path'"))?;

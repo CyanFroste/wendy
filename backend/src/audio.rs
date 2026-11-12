@@ -2,6 +2,7 @@ use anyhow::Result;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, Sample, SampleFormat, SizedSample, Stream, StreamConfig};
 use parking_lot::Mutex;
+use serde::Serialize;
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -156,4 +157,95 @@ fn downsample(samples: &[f32], target: usize) -> Vec<f32> {
             if mean >= 0.0 { rms } else { -rms }
         })
         .collect()
+}
+
+#[derive(Serialize, Clone, Debug)]
+pub struct Volume {
+    pub level: f32, // 0.0 ..= 1.0
+    pub muted: bool,
+}
+
+pub mod volume_controls {
+    use super::Volume;
+    use anyhow::Result;
+    use windows::Win32::Media::Audio::Endpoints::IAudioEndpointVolume;
+    use windows::Win32::Media::Audio::{
+        IMMDeviceEnumerator, MMDeviceEnumerator, eMultimedia, eRender,
+    };
+    use windows::Win32::System::Com::{
+        CLSCTX_ALL, COINIT_MULTITHREADED, CoCreateInstance, CoInitializeEx, CoUninitialize,
+    };
+    use windows::core::GUID;
+
+    struct ComScope(bool);
+
+    impl ComScope {
+        fn new() -> Self {
+            let hr = unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) };
+            Self(hr.is_ok())
+        }
+    }
+
+    impl Drop for ComScope {
+        fn drop(&mut self) {
+            if self.0 {
+                unsafe { CoUninitialize() };
+            }
+        }
+    }
+
+    fn with_endpoint<F, R>(f: F) -> Result<R>
+    where
+        F: FnOnce(&IAudioEndpointVolume) -> windows::core::Result<R>,
+    {
+        let _com = ComScope::new();
+
+        unsafe {
+            let enumerator: IMMDeviceEnumerator =
+                CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)?;
+            let device = enumerator.GetDefaultAudioEndpoint(eRender, eMultimedia)?;
+            let endpoint: IAudioEndpointVolume = device.Activate(CLSCTX_ALL, None)?;
+
+            Ok(f(&endpoint)?)
+        }
+    }
+
+    pub fn get_volume() -> Result<Volume> {
+        with_endpoint(|ep| unsafe {
+            Ok(Volume {
+                level: ep.GetMasterVolumeLevelScalar()?,
+                muted: ep.GetMute()?.as_bool(),
+            })
+        })
+    }
+
+    pub fn set_volume(level: f32) -> Result<Volume> {
+        let clamped = level.clamp(0.0, 1.0);
+        with_endpoint(|ep| unsafe {
+            ep.SetMasterVolumeLevelScalar(clamped, &GUID::zeroed())?;
+
+            // automatically unmute when user drags volume up above 0
+            if clamped > 0.0 && ep.GetMute()?.as_bool() {
+                ep.SetMute(false, &GUID::zeroed())?;
+            }
+
+            Ok(Volume {
+                level: ep.GetMasterVolumeLevelScalar()?,
+                muted: ep.GetMute()?.as_bool(),
+            })
+        })
+    }
+
+    pub fn toggle_mute() -> Result<Volume> {
+        with_endpoint(|ep| unsafe {
+            let next_mute = !ep.GetMute()?.as_bool();
+
+            ep.SetMute(next_mute, &GUID::zeroed())?;
+
+            Ok(Volume {
+                level: ep.GetMasterVolumeLevelScalar()?,
+                muted: next_mute,
+            })
+        })
+    }
 }
