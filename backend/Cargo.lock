@@ -4719,6 +4719,7 @@ dependencies = [
  "tauri-plugin-wallpaper",
  "tokio",
  "walkdir",
+ "windows 0.62.2",
 ]
 
 [[package]]

@@ -2,6 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod commands;
+mod media;
 mod types;
 mod utils;
 
@@ -16,7 +17,7 @@ async fn main() -> Result<()> {
             .with_cpu(CpuRefreshKind::everything())
             .with_memory(MemoryRefreshKind::everything()),
     )?;
-    
+
     system.refresh_cpu_all();
     system.refresh_memory();
 
