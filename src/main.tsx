@@ -13,6 +13,7 @@ import { Widgets } from '@/components/widgets'
 import { WidgetEditor } from '@/components/widget-editor'
 import { Widget } from '@/components/widget'
 import { ActiveWidgets } from '@/components/active-widgets'
+import { Help } from '@/components/help'
 import { activeWidgetsStore, createWidgetWindow } from '@/utils'
 import type { ActiveWidget } from '@/types'
 
@@ -27,6 +28,7 @@ const router = createBrowserRouter([
       { path: '/active', Component: ActiveWidgets },
       { path: '/settings', Component: Settings },
       { path: '/editor/:id/:instanceId?', Component: WidgetEditor },
+      { path: '/help', Component: Help },
     ],
   },
   { path: '/widgets/:id/:instanceId', Component: Widget },

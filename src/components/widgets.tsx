@@ -26,17 +26,25 @@ export function Widgets() {
 
   const [searchQuery, setSearchQuery] = useState('')
   const [debouncedSearchQuery] = useDebounce(searchQuery, 500)
+  const [showBackgroundsOnly, setShowBackgroundOnly] = useState(false)
 
   useEffect(() => {
-    if (!debouncedSearchQuery.trim()) return setFiltered(widgets)
+    if (!debouncedSearchQuery.trim()) {
+      if (showBackgroundsOnly) return setFiltered(widgets.filter(it => it.isBackground))
+      return setFiltered(widgets)
+    }
 
-    const data = searchIndex
-      .search(debouncedSearchQuery)
-      .map(it => map.get(it.id))
-      .filter(Boolean) as Widget[]
+    const data: Widget[] = []
+
+    for (const { id } of searchIndex.search(debouncedSearchQuery)) {
+      const item = map.get(id)
+      if (!item || (showBackgroundsOnly && !item.isBackground)) continue
+
+      data.push(item)
+    }
 
     setFiltered(data)
-  }, [widgets, debouncedSearchQuery])
+  }, [widgets, debouncedSearchQuery, showBackgroundsOnly])
 
   useEffect(() => {
     searchIndex.removeAll()
@@ -63,7 +71,7 @@ export function Widgets() {
           </SearchField.Group>
         </SearchField>
 
-        <Switch>
+        <Switch isSelected={showBackgroundsOnly} onChange={setShowBackgroundOnly}>
           <Switch.Content>
             <Switch.Control>
               <Switch.Thumb>

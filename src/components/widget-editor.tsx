@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router'
 import { readTextFile } from '@tauri-apps/plugin-fs'
 import { convertFileSrc } from '@tauri-apps/api/core'
-import { currentMonitor as getCurrentMonitor } from '@tauri-apps/api/window'
+import { getAllWindows, currentMonitor as getCurrentMonitor } from '@tauri-apps/api/window'
 import { Button, Chip, Code, Modal, Separator } from '@heroui/react'
 import { PiArrowClockwise, PiImageFill, PiPlus } from 'react-icons/pi'
 import { getWidget, getWidgetAsset, invokeWidgetRpc } from '@/commands'
@@ -19,6 +19,21 @@ export function WidgetEditor() {
 
   const [widget, setWidget] = useState<Nullable<Widget>>(null)
   const [srcDoc, setSrcDoc] = useState('')
+
+  const onUpdate = async (widget: Widget, instanceId: string, data?: Nullable<unknown>) => {
+    const key = getWidgetKey(widget.id, instanceId)
+    const activeWidget = await activeWidgetsStore.get<ActiveWidget>(key)
+    if (!activeWidget) return
+
+    activeWidget.meta = widget
+    activeWidget.data = data
+
+    await activeWidgetsStore.set(key, activeWidget)
+    await activeWidgetsStore.save()
+
+    await (await getAllWindows()).find(w => w.label === key)?.close()
+    createWidgetWindow(activeWidget)
+  }
 
   const onCreate = async (widget: Widget, data?: Nullable<unknown>) => {
     const instanceId = crypto.randomUUID()
@@ -79,8 +94,7 @@ export function WidgetEditor() {
       editorWindow.postMessage({ type: 'REQUEST_WIDGET_EDITOR_DATA' }, '*')
     })
 
-    // TODO
-    if (instanceId) return
+    if (instanceId) onUpdate(widget, instanceId, data)
     else onCreate(widget, data)
   }
 
@@ -195,16 +209,6 @@ export function WidgetEditor() {
                             ))}
                           </div>
                         </div>
-
-                        {/* <div className="flex flex-col gap-2">
-                          <div className="text-muted text-xs tracking-wide">TAGS</div>
-                          
-                          <div className="flex flex-wrap gap-2">
-                          {widget.tags.map(it => (
-                            <Chip key={it}>{it}</Chip>
-                            ))}
-                            </div>
-                            </div> */}
                       </div>
 
                       <Separator className="my-4" />

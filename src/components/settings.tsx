@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Button, Input, Label, Separator } from '@heroui/react'
 import { open as openFilePicker } from '@tauri-apps/plugin-dialog'
-import { PiCheck, PiFolder } from 'react-icons/pi'
+import { revealItemInDir } from '@tauri-apps/plugin-opener'
+import { PiCheck, PiFolder, PiMagnifyingGlass } from 'react-icons/pi'
 import { useStore } from 'zustand'
 import { addPathToFsScope } from '@/commands'
 import { globalStore } from '@/utils'
@@ -47,14 +48,22 @@ export function Settings() {
           />
         </div>
 
-        <Button
-          variant="outline"
-          onPress={async () => {
-            const dir = await openFilePicker({ directory: true })
-            if (dir) setWidgetsPath(dir)
-          }}>
-          <PiFolder className="text-lg text-muted" /> Select
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onPress={async () => {
+              const dir = await openFilePicker({ directory: true })
+              if (dir) setWidgetsPath(dir)
+            }}>
+            <PiFolder className="text-lg text-muted" /> Select
+          </Button>
+
+          {widgetsPath && (
+            <Button variant="outline" onPress={() => revealItemInDir(widgetsPath)}>
+              <PiMagnifyingGlass className="text-lg text-muted" /> Show in Explorer
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   )
