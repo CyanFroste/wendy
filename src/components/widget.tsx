@@ -7,12 +7,11 @@ import { emitTo, listen } from '@tauri-apps/api/event'
 import { Button, ToggleButton } from '@heroui/react'
 import { cn } from '@heroui/styles'
 import formatBytes from 'pretty-bytes'
-import { PiLock, PiNotePencil, PiTrash } from 'react-icons/pi'
+import { PiLockKey, PiLockKeyOpen, PiNotePencil, PiPushPin, PiPushPinSlash, PiTrash } from 'react-icons/pi'
 import { getWidgetAsset, invokeWidgetRpc } from '@/commands'
 import { activeWidgetsStore, extractErrorMessage, getWidgetKey } from '@/utils'
 import preludeScript from '@/scripts/widget-prelude?raw'
 import commonPreludeCss from '@/scripts/common-prelude.css?raw'
-import preludeCss from '@/scripts/widget-prelude.css?raw'
 import type { Options as FormatBytesOptions } from 'pretty-bytes'
 import type { ActiveWidget, Nullable, Widget, RpcRequest, RpcResponse, MediaSessionInfo } from '@/types'
 
@@ -28,14 +27,19 @@ export function Widget() {
 
   const [showControls, setShowControls] = useState(false)
 
-  const onToggleLock = async (isLocked: boolean) => {
+  const onUpdateValue = async <K extends keyof ActiveWidget>(key: K, value: ActiveWidget[K]) => {
     if (!widget) return
-    const key = getWidgetKey(widget.meta.id, widget.instanceId)
-    const updated = { ...widget, isLocked }
+    const widgetKey = getWidgetKey(widget.meta.id, widget.instanceId)
+    const updated = { ...widget, [key]: value }
 
-    await activeWidgetsStore.set(key, updated)
+    await activeWidgetsStore.set(widgetKey, updated)
     await activeWidgetsStore.save()
     setWidget(updated)
+
+    if (!widget.meta.isBackground && key === 'isPinned') {
+      await currentWindow.setAlwaysOnBottom(!value)
+      await currentWindow.setAlwaysOnTop(value as boolean)
+    }
   }
 
   const onRemove = async () => {
@@ -62,7 +66,7 @@ export function Widget() {
       if (!widget) return
 
       setWidget(widget)
-      setSrcDoc(await createWidgetSrcDoc(widget))
+      setSrcDoc(await createSrcDoc(widget))
     })()
   }, [id, instanceId])
 
@@ -126,7 +130,7 @@ export function Widget() {
 
   useEffect(() => {
     const toggleControls = async (key: string, ctrl: boolean) => {
-      if (ctrl && key === 't') setShowControls(prev => !prev)
+      if (!widget?.meta.isBackground && ctrl && key === 't') setShowControls(prev => !prev)
     }
 
     const onKeyDown = async (evt: KeyboardEvent) => {
@@ -134,7 +138,7 @@ export function Widget() {
       if (!evt.ctrlKey || key !== 't') return
 
       evt.preventDefault()
-      await toggleControls(key, evt.ctrlKey)
+      await toggleControls(key, evt.ctrlKey || evt.metaKey)
     }
 
     const onMessage = async (evt: MessageEvent) => {
@@ -162,34 +166,52 @@ export function Widget() {
 
   return (
     <div className="size-full flex flex-col gap-4">
-      <div
-        className={cn(
-          'flex flex-col fixed inset-0 z-100 transition-opacity duration-300 ease-in-out',
-          showControls ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0',
-        )}>
-        <div className="shrink-0 absolute top-4 inset-x-4 z-10 rounded-lg flex bg-accent/25 backdrop-blur-lg">
-          <div
-            data-tauri-drag-region={!widget?.isLocked}
-            className={cn('flex-1', showControls && !widget?.isLocked && 'pointer-events-auto cursor-move')}
-          />
+      {!widget?.meta.isBackground && (
+        <div
+          className={cn(
+            'flex flex-col fixed inset-0 z-100 transition-opacity duration-300 ease-in-out',
+            showControls ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0',
+          )}>
+          <div className="shrink-0 absolute top-4 inset-x-4 z-10 rounded-lg flex bg-accent/25 backdrop-blur-lg">
+            <div
+              data-tauri-drag-region={!widget?.isLocked}
+              className={cn('flex-1', showControls && !widget?.isLocked && 'pointer-events-auto cursor-move')}
+            />
 
-          <div className="flex items-center gap-2 p-2">
-            <ToggleButton isIconOnly size="sm" variant="ghost" isSelected={widget?.isLocked} onChange={onToggleLock}>
-              <PiLock className="text-lg" />
-            </ToggleButton>
+            <div className="flex items-center gap-2 p-2">
+              <ToggleButton
+                isIconOnly
+                size="sm"
+                variant="ghost"
+                className="text-lg"
+                isSelected={!!widget?.isLocked}
+                onChange={value => onUpdateValue('isLocked', value)}>
+                {widget?.isLocked ? <PiLockKeyOpen /> : <PiLockKey />}
+              </ToggleButton>
 
-            <Button isIconOnly size="sm" variant="ghost" onPress={onEdit}>
-              <PiNotePencil className="text-lg" />
-            </Button>
+              <ToggleButton
+                isIconOnly
+                size="sm"
+                variant="ghost"
+                className="text-lg"
+                isSelected={!!widget?.isPinned}
+                onChange={value => onUpdateValue('isPinned', value)}>
+                {widget?.isPinned ? <PiPushPinSlash /> : <PiPushPin />}
+              </ToggleButton>
 
-            <Button isIconOnly size="sm" variant="danger-soft" onPress={onRemove}>
-              <PiTrash className="text-lg" />
-            </Button>
+              <Button isIconOnly size="sm" variant="ghost" onPress={onEdit}>
+                <PiNotePencil className="text-lg" />
+              </Button>
+
+              <Button isIconOnly size="sm" variant="danger-soft" onPress={onRemove}>
+                <PiTrash className="text-lg" />
+              </Button>
+            </div>
           </div>
-        </div>
 
-        <ResizeControls />
-      </div>
+          <ResizeControls />
+        </div>
+      )}
 
       {srcDoc && <iframe ref={containerRef} srcDoc={srcDoc} sandbox="allow-scripts" className="size-full flex" />}
     </div>
@@ -252,7 +274,7 @@ function ResizeControls() {
   )
 }
 
-export async function createWidgetSrcDoc(widget: ActiveWidget) {
+async function createSrcDoc(widget: ActiveWidget) {
   const html = await readTextFile(`${widget.meta.path}/content/index.html`)
   const css = await readTextFile(`${widget.meta.path}/content/styles.css`)
   const script = await readTextFile(`${widget.meta.path}/content/script.js`)
@@ -264,12 +286,14 @@ export async function createWidgetSrcDoc(widget: ActiveWidget) {
         <meta charset="utf-8" />
         <meta name="color-scheme" content="light dark">        
         <style>${commonPreludeCss}</style>
-        <style>${preludeCss}</style>
         <style>${css}</style>
       </head>
       <body>
         ${html}        
-        <script>window.widgetInstanceData = ${widget.data ? JSON.stringify(widget.data) : 'null'}</script>
+        <script>
+          window.widgetMeta = ${JSON.stringify(widget.meta)}
+          window.widgetInstanceData = ${widget.data ? JSON.stringify(widget.data) : 'null'}
+        </script>
         <script>${preludeScript}</script>
         <script>${script}</script>
       </body>

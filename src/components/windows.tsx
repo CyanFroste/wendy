@@ -1,44 +1,90 @@
-import { useEffect } from 'react'
-import { Link, Outlet, useNavigate } from 'react-router'
+import { useEffect, useState } from 'react'
+import { Link, Outlet, useLocation, useNavigate } from 'react-router'
 import { listen } from '@tauri-apps/api/event'
 import { getCurrentWindow } from '@tauri-apps/api/window'
-import { Button, Separator } from '@heroui/react'
+import { Button, Chip, Separator } from '@heroui/react'
 import { buttonVariants } from '@heroui/styles'
-import { PiGear, PiX } from 'react-icons/pi'
+import { PiArrowClockwise, PiCheckCircle, PiGear, PiX } from 'react-icons/pi'
+import { BiSolidWidget } from 'react-icons/bi'
+import { useStore } from 'zustand'
+import { activeWidgetsStore, globalStore } from '@/utils'
+import { getWidgets } from '@/commands'
 
 export function Window() {
-  const currentWindow = getCurrentWindow()
   const navigate = useNavigate()
+  const location = useLocation()
+  const currentWindow = getCurrentWindow()
+  const store = useStore(globalStore)
+  const [activeWidgetsCount, setActiveWidgetsCount] = useState(0)
+
+  const onActiveWidgetsChange = async () => {
+    const count = await activeWidgetsStore.length()
+    setActiveWidgetsCount(count)
+  }
+
+  const refetch = async () => {
+    await activeWidgetsStore.reload()
+    await onActiveWidgetsChange()
+    await getWidgets(store.widgetsPath, true)
+
+    globalStore.setState(prev => ({ refetchCounter: prev.refetchCounter + 1 }))
+  }
 
   useEffect(() => {
-    const unlisten = listen<string>('redirect', async evt => {
+    const redirectListener = listen<string>('redirect', async evt => {
       navigate(evt.payload)
       await currentWindow.setFocus()
     })
 
+    const activeWidgetsStoreListener = activeWidgetsStore.onChange(onActiveWidgetsChange)
+    onActiveWidgetsChange()
+
     return () => {
-      unlisten.then(fn => fn())
+      redirectListener.then(fn => fn())
+      activeWidgetsStoreListener.then(fn => fn())
     }
   }, [])
+
+  const getLinkClasses = (path: string) =>
+    buttonVariants({ size: 'sm', variant: location.pathname === path ? 'tertiary' : 'ghost' })
 
   return (
     <div className="flex flex-col h-full overflow-auto p-2 gap-2 bg-background">
       <div
         data-tauri-drag-region
         className="shrink-0 flex items-center gap-2 w-full bg-surface rounded-lg pointer-events-auto p-2">
-        <Link to="/" className="leading-none tracking-wide font-medium mx-2">
-          Wendy
+        <Link to="/" className="flex items-center gap-2 px-2">
+          <img src="/icon.png" className="size-8" />
+          {/* <div className="leading-none tracking-wide font-medium">Wendy Widget Framework</div> */}
         </Link>
 
         <Separator orientation="vertical" />
 
-        <Link to="/settings" className={buttonVariants({ size: 'sm', variant: 'ghost' })}>
+        <Link to="/" className={getLinkClasses('/')}>
+          <BiSolidWidget className="text-lg text-muted" /> Widgets
+        </Link>
+
+        <Link to="/active" className={getLinkClasses('/active')}>
+          <PiCheckCircle className="text-lg text-muted" />
+          Active
+          {activeWidgetsCount > 0 && (
+            <Chip size="sm" color="success" variant="primary">
+              <Chip.Label>{activeWidgetsCount}</Chip.Label>
+            </Chip>
+          )}
+        </Link>
+
+        <Link to="/settings" className={getLinkClasses('/settings')}>
           <PiGear className="text-lg text-muted" /> Settings
         </Link>
 
         <div className="flex gap-2 items-center ml-auto">
+          <Button isIconOnly size="sm" variant="tertiary" onPress={refetch}>
+            <PiArrowClockwise className="text-lg" />
+          </Button>
+
           <Button isIconOnly size="sm" variant="danger-soft" onPress={() => currentWindow.hide()}>
-            <PiX />
+            <PiX className="text-lg" />
           </Button>
         </div>
       </div>

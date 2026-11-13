@@ -3,27 +3,18 @@ import '@/styles.css'
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { createBrowserRouter, RouterProvider } from 'react-router'
-import {
-  getCurrentWindow,
-  getAllWindows,
-  // currentMonitor as getCurrentMonitor,
-  // PhysicalPosition,
-  // PhysicalSize,
-} from '@tauri-apps/api/window'
+import { getCurrentWindow, getAllWindows } from '@tauri-apps/api/window'
 import { TrayIcon } from '@tauri-apps/api/tray'
 import { Menu } from '@tauri-apps/api/menu'
 import { defaultWindowIcon } from '@tauri-apps/api/app'
-// import { attach as attachWindowAsWallpaper, setInteractive } from 'tauri-plugin-wallpaper'
 import { Window } from '@/components/windows'
 import { Settings } from '@/components/settings'
-import { Picker } from '@/components/picker'
-import { Editor } from '@/components/editor'
+import { Widgets } from '@/components/widgets'
+import { WidgetEditor } from '@/components/widget-editor'
 import { Widget } from '@/components/widget'
+import { ActiveWidgets } from '@/components/active-widgets'
 import { activeWidgetsStore, createWidgetWindow } from '@/utils'
 import type { ActiveWidget } from '@/types'
-
-// await attachWindowAsWallpaper('main')
-// await setInteractive(true, 'main')
 
 const currentWindow = getCurrentWindow()
 
@@ -32,9 +23,10 @@ const router = createBrowserRouter([
     path: '/',
     Component: Window,
     children: [
-      { path: '/', Component: Picker },
+      { path: '/', Component: Widgets },
+      { path: '/active', Component: ActiveWidgets },
       { path: '/settings', Component: Settings },
-      { path: '/editor/:id/:instanceId?', Component: Editor },
+      { path: '/editor/:id/:instanceId?', Component: WidgetEditor },
     ],
   },
   { path: '/widgets/:id/:instanceId', Component: Widget },
@@ -72,20 +64,33 @@ if (currentWindow.label === 'main' && window.location.pathname === '/') {
     await activeWidgetsStore.save()
   })
 
+  async function focusAllWidgets() {
+    // unable to focus all widget windows if main window is hidden
+    await showMainWindow()
+    await Promise.allSettled((await getAllWindows()).filter(w => w.label !== 'main').map(w => w.setFocus()))
+  }
+
+  async function showMainWindow() {
+    await currentWindow.show()
+    await currentWindow.setFocus()
+    await currentWindow.unminimize()
+  }
+
   await TrayIcon.new({
     title: 'wendy',
     icon: (await defaultWindowIcon())!,
     menuOnLeftClick: false,
     menu: await Menu.new({
       items: [
-        { id: 'open', text: 'Open', action: () => currentWindow.show() },
+        { id: 'show-widgets', text: 'Show all widgets', action: focusAllWidgets },
+        { id: 'show-main', text: 'Show main window', action: showMainWindow },
         { id: 'close', text: 'Close', action: () => currentWindow.close() },
       ],
     }),
     action: async evt => {
       switch (evt.type) {
         case 'DoubleClick':
-          await currentWindow.show()
+          await showMainWindow()
           break
       }
     },

@@ -1,5 +1,8 @@
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow'
 import { load as loadStore } from '@tauri-apps/plugin-store'
+import { attach as attachWindowAsWallpaper, setInteractive } from 'tauri-plugin-wallpaper'
+import { createStore } from 'zustand'
+import { persist } from 'zustand/middleware'
 import { startAudioCapture, startMediaListener } from '@/commands'
 import type { ActiveWidget } from '@/types'
 
@@ -9,13 +12,13 @@ export function getWidgetKey(id: string, instanceId: string) {
   return `${id}/${instanceId}`
 }
 
-export function createWidgetWindow({ meta, instanceId, isLocked, height, width, x, y }: ActiveWidget) {
+export function createWidgetWindow({ meta, instanceId, isLocked, isPinned, height, width, x, y }: ActiveWidget) {
   const key = getWidgetKey(meta.id, instanceId)
   const url = `/widgets/${key}`
 
   const window = new WebviewWindow(key, {
-    url,
     title: meta.name,
+    url,
     height,
     width,
     x,
@@ -34,8 +37,17 @@ export function createWidgetWindow({ meta, instanceId, isLocked, height, width, 
   })
 
   window.once('tauri://created', async () => {
-    if (import.meta.env.PROD) await window.setAlwaysOnBottom(true)
+    if (!meta.isBackground) {
+      if (isPinned) await window.setAlwaysOnTop(true)
+      else await window.setAlwaysOnBottom(true)
+    }
+
     await window.show()
+
+    if (meta.isBackground) {
+      await attachWindowAsWallpaper(key)
+      if (import.meta.env.DEV) await setInteractive(true, key)
+    }
 
     if (meta.permissions.some(it => it === 'media:read')) {
       await startMediaListener(key)
@@ -66,3 +78,12 @@ export function extractErrorMessage(err: unknown) {
     }
   }
 }
+
+type GlobalStore = { widgetsPath: string; refetchCounter: number }
+
+export const globalStore = createStore<GlobalStore>()(
+  persist(() => ({ widgetsPath: '', refetchCounter: 0 }), {
+    name: 'settings',
+    partialize: ({ refetchCounter, ...state }) => state,
+  }),
+)

@@ -70,3 +70,16 @@ window.widgetApi = (() => {
     },
   }
 })()
+
+async function main() {
+  if (window.widgetMeta.isBackground) {
+    const el = document.querySelector('img#background')
+    if (!el?.dataset.src) return
+
+    el.src = await window.widgetApi.utils.getAssetUrl(el.dataset.src)
+    el.style = `--object-fit: ${el.dataset.fit ?? 'cover'};`
+    el.classList.add('auto-set-background')
+  }
+}
+
+main().catch(console.error)

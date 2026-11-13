@@ -1,1 +1,19 @@
-- manage state and window creation on rust side
+- [x] pin to top toggle
+- [ ] backgrounds picker and widgets
+- [x] auto style backgrounds (`id="background"`, `data-src="path"`)
+- [ ] show documentation directly in the app as well
+- [ ] show more details on widget page
+- [x] list running widgets with actions to close/delete, and manage state
+- [ ] edit widget data
+- [ ] booru api
+- [ ] news api
+- [ ] weather api
+- [ ] local/remote image gallery widget
+- [ ] embeddable external/local webpage widget
+- [ ] reusable helper component library for widget authors
+- [ ] provide types for widget authors
+- [ ] template generator to scaffold boilerplate widget projects quickly
+- [ ] document all RPC functions and types
+- [ ] ? expose template generator and build/dev utilities via app cli
+- [ ] ? manage state and window creation on rust side
+- [ ] ? test widget with monitor scale factor

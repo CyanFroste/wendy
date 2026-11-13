@@ -1,15 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Button, Input, Label, Separator } from '@heroui/react'
 import { open as openFilePicker } from '@tauri-apps/plugin-dialog'
-import { createStore, useStore } from 'zustand'
-import { persist } from 'zustand/middleware'
 import { PiCheck, PiFolder } from 'react-icons/pi'
+import { useStore } from 'zustand'
 import { addPathToFsScope } from '@/commands'
-
-export const store = createStore<Store>()(persist(initialState, { name: 'settings' }))
+import { globalStore } from '@/utils'
 
 export function Settings() {
-  const existing = useStore(store)
+  const store = useStore(globalStore)
   const [widgetsPath, setWidgetsPath] = useState('')
 
   const isChanged = true // TODO - also save only changed values
@@ -17,12 +15,11 @@ export function Settings() {
   const onSave = async () => {
     // TODO? clear other scopes first?
     await addPathToFsScope(widgetsPath)
-
-    store.setState({ widgetsPath })
+    globalStore.setState({ widgetsPath })
   }
 
   useEffect(() => {
-    setWidgetsPath(existing.widgetsPath)
+    setWidgetsPath(store.widgetsPath)
   }, [])
 
   return (
@@ -61,15 +58,4 @@ export function Settings() {
       </div>
     </div>
   )
-}
-
-type Store = {
-  widgetsPath: string
-}
-
-// had to put this in a fn because false is not assignable to boolean? WTF?
-function initialState(): Store {
-  return {
-    widgetsPath: '',
-  }
 }

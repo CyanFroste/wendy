@@ -2,17 +2,18 @@ import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router'
 import { readTextFile } from '@tauri-apps/plugin-fs'
 import { convertFileSrc } from '@tauri-apps/api/core'
-import { Button, Separator } from '@heroui/react'
-import { PiArrowClockwise, PiPlus } from 'react-icons/pi'
+import { currentMonitor as getCurrentMonitor } from '@tauri-apps/api/window'
+import { Button, Chip, Code, Modal, Separator } from '@heroui/react'
+import { PiArrowClockwise, PiImageFill, PiPlus } from 'react-icons/pi'
 import { getWidget, getWidgetAsset, invokeWidgetRpc } from '@/commands'
-import { activeWidgetsStore, createWidgetWindow, extractErrorMessage, getWidgetKey } from '@/utils'
-import { store as settingsStore } from '@/components/settings'
+import { activeWidgetsStore, createWidgetWindow, extractErrorMessage, getWidgetKey, globalStore } from '@/utils'
 import preludeScript from '@/scripts/widget-editor-prelude?raw'
+import commonPreludeCss from '@/scripts/common-prelude.css?raw'
 import type { ActiveWidget, Nullable, RpcRequest, RpcResponse, Widget } from '@/types'
 
 type PathParams = { id: string; instanceId?: string }
 
-export function Editor() {
+export function WidgetEditor() {
   const { id, instanceId } = useParams<PathParams>()
   const editorRef = useRef<HTMLIFrameElement>(null)
 
@@ -22,16 +23,26 @@ export function Editor() {
   const onCreate = async (widget: Widget, data?: Nullable<unknown>) => {
     const instanceId = crypto.randomUUID()
     const key = getWidgetKey(widget.id, instanceId)
+    const currentMonitor = await getCurrentMonitor()
+    let [width, height] = [400, 400]
+
+    if (widget.isBackground && currentMonitor) {
+      const monitorSize = currentMonitor.size.toLogical(currentMonitor.scaleFactor)
+
+      width = monitorSize.width
+      height = monitorSize.height
+    }
 
     const activeWidget: ActiveWidget = {
       instanceId,
       meta: widget,
-      isLocked: false,
-      height: 400,
-      width: 400,
-      x: 20,
-      y: 20,
       data,
+      isLocked: false,
+      isPinned: false,
+      height,
+      width,
+      x: 0,
+      y: 0,
     }
 
     await activeWidgetsStore.set(key, activeWidget)
@@ -112,11 +123,11 @@ export function Editor() {
   useEffect(() => {
     if (!id) return
     ;(async () => {
-      const widget = await getWidget(settingsStore.getState().widgetsPath, id)
+      const widget = await getWidget(globalStore.getState().widgetsPath, id)
       if (!widget) return
 
       setWidget(widget)
-      setSrcDoc(await createWidgetEditorSrcDoc(widget))
+      setSrcDoc(await createSrcDoc(widget))
     })()
   }, [id, instanceId])
 
@@ -127,13 +138,85 @@ export function Editor() {
           <div className="flex gap-2">
             <img
               src={convertFileSrc(widget.previewPath)}
-              className="size-40 object-contain border border-separator rounded-lg"
+              className="size-40 shrink-0 object-contain data-[placeholder=true]:object-cover border border-separator rounded-lg"
+              onError={evt => {
+                evt.currentTarget.src = '/placeholder.png'
+                evt.currentTarget.setAttribute('data-placeholder', 'true')
+              }}
             />
 
             <div className="flex flex-col gap-2">
-              <div className="text-lg">{widget.name}</div>
-              <div className="text-sm">{widget.version}</div>
+              <div className="text-lg flex items-center gap-2">
+                {widget.isBackground && <PiImageFill className="text-success" />} {widget.name}
+              </div>
+
+              <div className="text-sm">Version: {widget.version}</div>
               <div className="text-muted text-sm">{widget.description}</div>
+            </div>
+
+            <div className="flex ml-auto mt-auto">
+              <Modal>
+                <Button size="sm" variant="outline">
+                  Show more details
+                </Button>
+                <Modal.Backdrop>
+                  <Modal.Container>
+                    <Modal.Dialog className="p-4 rounded-lg max-w-200">
+                      <div className="flex flex-col gap-4">
+                        <img
+                          src={convertFileSrc(widget.previewPath)}
+                          className="h-100 w-full shrink-0 object-contain data-[placeholder=true]:object-cover border border-separator rounded-lg"
+                          onError={evt => {
+                            evt.currentTarget.src = '/placeholder.png'
+                            evt.currentTarget.setAttribute('data-placeholder', 'true')
+                          }}
+                        />
+
+                        {/* TODO?: render long description as markdown */}
+
+                        <Separator />
+                        <div className="flex flex-col gap-2 text-sm">
+                          {/* <div>Author: {widget.author}</div> */}
+                          <div>
+                            ID: <Code>{widget.id}</Code>
+                          </div>
+                          <div>
+                            Location: <Code>{widget.path}</Code>
+                          </div>
+                        </div>
+
+                        <Separator />
+                        <div className="flex flex-col gap-2">
+                          <div className="text-muted text-xs tracking-wide">PERMISSIONS</div>
+
+                          <div className="flex flex-wrap gap-2">
+                            {widget.permissions.map(it => (
+                              <Chip key={it}>{it}</Chip>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* <div className="flex flex-col gap-2">
+                          <div className="text-muted text-xs tracking-wide">TAGS</div>
+                          
+                          <div className="flex flex-wrap gap-2">
+                          {widget.tags.map(it => (
+                            <Chip key={it}>{it}</Chip>
+                            ))}
+                            </div>
+                            </div> */}
+                      </div>
+
+                      <Separator className="my-4" />
+                      <Modal.Footer>
+                        <Button slot="close" variant="outline">
+                          Close
+                        </Button>
+                      </Modal.Footer>
+                    </Modal.Dialog>
+                  </Modal.Container>
+                </Modal.Backdrop>
+              </Modal>
             </div>
           </div>
 
@@ -143,7 +226,7 @@ export function Editor() {
 
       <div className="flex items-center">
         <div className="text-muted text-xs tracking-wide">
-          {instanceId ? `UPDATE INSTANCE (${instanceId})` : 'NEW INSTANCE'}
+          {instanceId ? `UPDATE INSTANCE (${instanceId})` : 'CREATE NEW INSTANCE'}
         </div>
 
         <Button className="ml-auto" onPress={onAction}>
@@ -167,14 +250,10 @@ export function Editor() {
   )
 }
 
-export async function createWidgetEditorSrcDoc(widget: Widget, data?: unknown) {
+async function createSrcDoc(widget: Widget, data?: unknown) {
   const html = await readTextFile(`${widget.path}/editor/index.html`)
   const css = await readTextFile(`${widget.path}/editor/styles.css`)
   const script = await readTextFile(`${widget.path}/editor/script.js`)
-
-  // we need 2 things
-  // - send the form data back to the host
-  // - send existing data to the form
 
   return `
     <!DOCTYPE html>
@@ -182,6 +261,7 @@ export async function createWidgetEditorSrcDoc(widget: Widget, data?: unknown) {
       <head>
         <meta charset="utf-8" />
         <meta name="color-scheme" content="light dark">
+        <style>${commonPreludeCss}</style>
         <style>${css}</style>
       </head>
       <body>

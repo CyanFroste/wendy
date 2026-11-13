@@ -6,6 +6,7 @@ use serde::Serialize;
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 const CHUNK_SIZE: usize = 256;
@@ -30,25 +31,19 @@ impl AudioState {
     where
         F: Fn(Vec<f32>) + Send + Sync + 'static,
     {
-        let should_spawn = {
-            let mut subs = self.subscribers.lock();
-            subs.insert(label);
-            self.generation.load(Ordering::SeqCst) == 0
+        let this_gen = {
+            let mut subscribers = self.subscribers.lock();
+            subscribers.insert(label);
+
+            if self.generation.load(Ordering::SeqCst) != 0 {
+                return;
+            }
+
+            let id = self.next_gen.fetch_add(1, Ordering::Relaxed);
+            self.generation.store(id, Ordering::SeqCst);
+
+            id
         };
-
-        if !should_spawn {
-            return;
-        }
-
-        let this_gen = self.next_gen.fetch_add(1, Ordering::Relaxed);
-
-        if self
-            .generation
-            .compare_exchange(0, this_gen, Ordering::SeqCst, Ordering::SeqCst)
-            .is_err()
-        {
-            return;
-        }
 
         let generation = Arc::clone(&self.generation);
         let on_samples = Arc::new(on_samples);
@@ -62,7 +57,9 @@ impl AudioState {
                 };
 
                 let current_id = device.id().map(|id| id.to_string()).unwrap_or_default();
-                let Ok(stream) = build_stream(&device, Arc::clone(&on_samples)) else {
+                let (err_tx, err_rx) = mpsc::channel::<()>();
+
+                let Ok(stream) = build_stream(&device, Arc::clone(&on_samples), err_tx) else {
                     std::thread::sleep(Duration::from_secs(1));
                     continue;
                 };
@@ -73,7 +70,11 @@ impl AudioState {
                 }
 
                 while generation.load(Ordering::SeqCst) == this_gen {
-                    std::thread::sleep(Duration::from_secs(1));
+                    // wake immediately on buffer underrun / device reset, or poll device changes every 500ms
+                    match err_rx.recv_timeout(Duration::from_millis(500)) {
+                        Ok(()) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
+                        Err(mpsc::RecvTimeoutError::Timeout) => {}
+                    }
 
                     let next_id = host
                         .default_output_device()
@@ -84,6 +85,11 @@ impl AudioState {
                     if next_id != current_id {
                         break;
                     }
+                }
+
+                drop(stream); // explicitly release the dead WASAPI stream before recreating it
+                if generation.load(Ordering::SeqCst) == this_gen {
+                    std::thread::sleep(Duration::from_millis(150));
                 }
             }
         });
@@ -99,7 +105,7 @@ impl AudioState {
     }
 }
 
-fn build_stream<F>(device: &Device, on_samples: Arc<F>) -> Result<Stream>
+fn build_stream<F>(device: &Device, on_samples: Arc<F>, err_tx: mpsc::Sender<()>) -> Result<Stream>
 where
     F: Fn(Vec<f32>) + Send + Sync + 'static,
 {
@@ -107,56 +113,93 @@ where
     let format = config.sample_format();
 
     match format {
-        SampleFormat::F32 => make_stream::<f32, F>(device, config.into(), on_samples),
-        SampleFormat::I16 => make_stream::<i16, F>(device, config.into(), on_samples),
-        SampleFormat::U16 => make_stream::<u16, F>(device, config.into(), on_samples),
+        SampleFormat::F32 => make_stream::<f32, F>(device, config.into(), on_samples, err_tx),
+        SampleFormat::I16 => make_stream::<i16, F>(device, config.into(), on_samples, err_tx),
+        SampleFormat::U16 => make_stream::<u16, F>(device, config.into(), on_samples, err_tx),
         _ => Err(anyhow::anyhow!("unsupported format: {format:?}")),
     }
 }
 
-fn make_stream<T, F>(device: &Device, config: StreamConfig, on_samples: Arc<F>) -> Result<Stream>
+fn make_stream<T, F>(
+    device: &Device,
+    config: StreamConfig,
+    on_samples: Arc<F>,
+    err_tx: mpsc::Sender<()>,
+) -> Result<Stream>
 where
     T: Sample<Float = f32> + SizedSample + Send + 'static,
     F: Fn(Vec<f32>) + Send + Sync + 'static,
 {
-    let channels = config.channels as usize;
+    let channels = (config.channels as usize).max(1);
+    let (frame_tx, frame_rx) = mpsc::sync_channel::<([f32; CHUNK_SIZE], usize)>(1);
     let mut last_emit = Instant::now();
+
+    std::thread::spawn(move || {
+        while let Ok((buf, len)) = frame_rx.recv() {
+            on_samples(buf[..len].to_vec());
+        }
+    });
 
     let stream = device.build_input_stream(
         config,
         move |data: &[T], _| {
-            if last_emit.elapsed() < Duration::from_millis(33) {
+            if data.is_empty() || last_emit.elapsed() < Duration::from_millis(33) {
                 return;
             }
 
             last_emit = Instant::now();
-            let mono: Vec<f32> = data
-                .chunks(channels)
-                .map(|f| f.iter().map(|s| s.to_float_sample()).sum::<f32>() / channels as f32)
-                .collect();
+            let mut out = [0.0f32; CHUNK_SIZE];
+            let len = downsample_interleaved(data, channels, &mut out);
 
-            on_samples(downsample(&mono, CHUNK_SIZE));
+            if len > 0 {
+                let _ = frame_tx.try_send((out, len));
+            }
         },
-        |err| eprintln!("audio stream error: {err}"),
+        move |err| {
+            // non-fatal in WASAPI loopback (fires once during initial buffer priming)
+            if matches!(err.kind(), cpal::ErrorKind::Xrun) {
+                return;
+            }
+            eprintln!("audio stream error (restarting): {err}");
+            let _ = err_tx.send(());
+        },
         None,
     )?;
 
     Ok(stream)
 }
 
-fn downsample(samples: &[f32], target: usize) -> Vec<f32> {
-    let len = samples.len();
-    if len <= target {
-        return samples.to_vec();
+fn downsample_interleaved<T>(data: &[T], channels: usize, out: &mut [f32; CHUNK_SIZE]) -> usize
+where
+    T: Sample<Float = f32> + SizedSample,
+{
+    let total_frames = data.len() / channels;
+    if total_frames == 0 {
+        return 0;
     }
-    (0..target)
-        .map(|i| {
-            let chunk = &samples[(i * len / target)..((i + 1) * len / target).min(len)];
-            let rms = (chunk.iter().map(|s| s * s).sum::<f32>() / chunk.len() as f32).sqrt();
-            let mean = chunk.iter().sum::<f32>() / chunk.len() as f32;
-            if mean >= 0.0 { rms } else { -rms }
-        })
-        .collect()
+
+    let buckets = total_frames.min(CHUNK_SIZE);
+    let inv_channels = 1.0 / channels as f32;
+
+    for (i, slot) in out.iter_mut().take(buckets).enumerate() {
+        let start = i * total_frames / buckets;
+        let end = ((i + 1) * total_frames / buckets).min(total_frames);
+        let count = (end - start).max(1) as f32;
+        let mut sum_sq = 0.0f32;
+        let mut sum = 0.0f32;
+
+        for f in start..end {
+            let frame = &data[f * channels..(f + 1) * channels];
+            let mono = frame.iter().map(|s| s.to_float_sample()).sum::<f32>() * inv_channels;
+            sum_sq += mono * mono;
+            sum += mono;
+        }
+
+        let rms = (sum_sq / count).sqrt();
+        *slot = if sum >= 0.0 { rms } else { -rms };
+    }
+
+    buckets
 }
 
 #[derive(Serialize, Clone, Debug)]

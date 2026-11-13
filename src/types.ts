@@ -5,7 +5,12 @@ export type Widget = {
   description: string
   version: string
   previewPath: string
+  isBackground: boolean
   permissions: string[]
+
+  // TODO
+  // author: string
+  // tags: string[]
 }
 
 export type ActiveWidget = {
@@ -13,6 +18,7 @@ export type ActiveWidget = {
   instanceId: string
   data: Nullable<unknown>
   isLocked: boolean
+  isPinned: boolean
   width: number
   height: number
   x: number

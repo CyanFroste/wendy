@@ -38,6 +38,8 @@ pub struct Widget {
     pub version: String,
     pub preview_path: Option<PathBuf>,
     #[serde(default)]
+    pub is_background: bool,
+    #[serde(default)]
     pub permissions: Vec<String>,
     #[serde(skip_deserializing)]
     pub path: PathBuf,
