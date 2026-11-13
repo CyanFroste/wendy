@@ -7,10 +7,10 @@ export type Widget = {
   previewPath: string
   isBackground: boolean
   permissions: string[]
-
-  // TODO
-  // author: string
-  // tags: string[]
+  allowedDomains: string[]
+  author: string
+  source: string
+  tags: string[]
 }
 
 export type ActiveWidget = {

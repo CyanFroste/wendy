@@ -4,11 +4,13 @@
 mod audio;
 mod commands;
 mod media;
+mod network;
 mod types;
 mod utils;
 
 use anyhow::Result;
 use audio::AudioState;
+use network::HttpClient;
 use sysinfo::{CpuRefreshKind, MemoryRefreshKind, RefreshKind, System};
 use types::{CacheState, MediaState, SystemState};
 
@@ -23,6 +25,7 @@ async fn main() -> Result<()> {
     system.refresh_cpu_all();
     system.refresh_memory();
 
+    let http_client = HttpClient::new(5, 10 * 1024 * 1024)?; // 10MB
     let system_state = SystemState::new(system);
     let media_state = MediaState::default();
     let audio_state = AudioState::new();
@@ -37,6 +40,7 @@ async fn main() -> Result<()> {
         .plugin(tauri_plugin_persisted_scope::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_wallpaper::init())
+        .manage(http_client)
         .manage(cache_state)
         .manage(system_state)
         .manage(media_state)

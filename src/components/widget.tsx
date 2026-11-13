@@ -4,12 +4,13 @@ import { convertFileSrc } from '@tauri-apps/api/core'
 import { readTextFile } from '@tauri-apps/plugin-fs'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { emitTo, listen } from '@tauri-apps/api/event'
+import { openUrl } from '@tauri-apps/plugin-opener'
 import { Button, ToggleButton } from '@heroui/react'
 import { cn } from '@heroui/styles'
 import formatBytes from 'pretty-bytes'
 import { PiLockKey, PiLockKeyOpen, PiNotePencil, PiPushPin, PiPushPinSlash, PiTrash } from 'react-icons/pi'
 import { getWidgetAsset, invokeWidgetRpc } from '@/commands'
-import { activeWidgetsStore, extractErrorMessage, getWidgetKey } from '@/utils'
+import { activeWidgetsStore, extractErrorMessage, getWidgetKey, htmlSafeJSON } from '@/utils'
 import preludeScript from '@/scripts/widget-prelude?raw'
 import commonPreludeCss from '@/scripts/common-prelude.css?raw'
 import type { Options as FormatBytesOptions } from 'pretty-bytes'
@@ -83,6 +84,15 @@ export function Widget() {
           const res: RpcResponse = { type: 'RPC_RESPONSE', id, payload: null }
 
           switch (method) {
+            case 'utils.open_external_url':
+              const url = new URL(params.url as string)
+
+              if (url.protocol !== 'https:') {
+                throw new Error(`Unsupported protocol: ${url.protocol}`)
+              }
+
+              await openUrl(url.toString())
+              break
             case 'utils.get_asset_url':
               res.payload = convertFileSrc(`${widget.meta.path}/assets/${params.path}`)
               break
@@ -278,25 +288,74 @@ async function createSrcDoc(widget: ActiveWidget) {
   const html = await readTextFile(`${widget.meta.path}/content/index.html`)
   const css = await readTextFile(`${widget.meta.path}/content/styles.css`)
   const script = await readTextFile(`${widget.meta.path}/content/script.js`)
+  const csp = createCsp(widget.meta)
 
   return `
     <!DOCTYPE html>
     <html>
       <head>
         <meta charset="utf-8" />
-        <meta name="color-scheme" content="light dark">        
+        <meta http-equiv="Content-Security-Policy" content="${csp}" />
+        <meta name="referrer" content="no-referrer" />
+        <meta name="color-scheme" content="light dark" />
         <style>${commonPreludeCss}</style>
         <style>${css}</style>
       </head>
       <body>
-        ${html}        
+        ${html}
         <script>
-          window.widgetMeta = ${JSON.stringify(widget.meta)}
-          window.widgetInstanceData = ${widget.data ? JSON.stringify(widget.data) : 'null'}
+          window.widgetMeta = ${htmlSafeJSON(widget.meta)};
+          window.widgetInstanceData = ${htmlSafeJSON(widget.data)};
         </script>
         <script>${preludeScript}</script>
         <script>${script}</script>
       </body>
-    </html>
-  `
+    </html>`
+}
+
+function domainsToCspSources(domains: string[] = []) {
+  if (!domains.length) return ''
+  const sources = new Set<string>()
+
+  for (const raw of domains) {
+    const clean = raw
+      .trim()
+      .toLowerCase()
+      .replace(/^https?:\/\//, '')
+      .replace(/\/.*$/, '')
+
+    if (!/^(\*\.)?[a-z0-9.-]+$/.test(clean)) continue
+
+    if (clean.startsWith('*.')) {
+      const apex = clean.slice(2)
+
+      sources.add(`https://${apex}`)
+      sources.add(`https://*.${apex}`)
+    } else {
+      sources.add(`https://${clean}`)
+    }
+  }
+
+  return [...sources].join(' ')
+}
+
+function createCsp(meta: Widget) {
+  const hasPermission = meta.permissions.some(it => it === 'network:exec')
+  const externalDomainSources = hasPermission ? domainsToCspSources(meta.allowedDomains) : ''
+  const assetSources = "'self' data: blob: asset: http://asset.localhost https://asset.localhost"
+  const mediaAndImgSources = [assetSources, externalDomainSources].filter(Boolean).join(' ')
+
+  return [
+    "default-src 'none'",
+    `script-src 'unsafe-inline' ${assetSources}`,
+    `style-src 'unsafe-inline' ${assetSources}`,
+    `img-src ${mediaAndImgSources}`,
+    `media-src ${mediaAndImgSources}`,
+    `font-src ${assetSources}`,
+    `connect-src ${assetSources}`,
+    "frame-src 'none'",
+    "object-src 'none'",
+    "base-uri 'none'",
+    "form-action 'none'",
+  ].join('; ')
 }

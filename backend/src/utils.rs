@@ -10,6 +10,7 @@ use tauri::{Manager, Window, WindowEvent};
 use walkdir::WalkDir;
 
 pub mod constants {
+    pub const RPC_NETWORK_REQUEST: &str = "network.request";
     pub const RPC_SYSTEM_GET_CPU_INFO: &str = "system.get_cpu_info";
     pub const RPC_SYSTEM_GET_RAM_INFO: &str = "system.get_ram_info";
     pub const RPC_SYSTEM_GET_DISK_INFO: &str = "system.get_disk_info";
@@ -28,6 +29,7 @@ pub fn get_rpc_required_scopes(method: &str) -> Option<&'static [&'static str]> 
     use constants::*;
 
     match method {
+        RPC_NETWORK_REQUEST => Some(&["network:exec"]),
         RPC_SYSTEM_GET_CPU_INFO => Some(&["system:read"]),
         RPC_SYSTEM_GET_RAM_INFO => Some(&["system:read"]),
         RPC_SYSTEM_GET_DISK_INFO => Some(&["system:read"]),

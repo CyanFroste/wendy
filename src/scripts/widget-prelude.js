@@ -33,6 +33,9 @@ window.widgetApi = (() => {
   }
 
   return {
+    network: {
+      request: (url, options) => call('network.request', { url, options }),
+    },
     audio: {
       getMasterVolume: () => call('audio.get_master_volume'),
       setMasterVolume: level => call('audio.set_master_volume', { level }),
@@ -64,6 +67,7 @@ window.widgetApi = (() => {
       getRecycleBinCount: () => call('system.get_recycle_bin_count'),
     },
     utils: {
+      openExternalUrl: url => call('utils.open_external_url', { url }),
       getAssetUrl: path => call('utils.get_asset_url', { path }),
       getAsset: path => call('utils.get_asset', { path }),
       formatBytes: (value, options) => call('utils.format_bytes', { value, options }),

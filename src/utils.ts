@@ -87,3 +87,7 @@ export const globalStore = createStore<GlobalStore>()(
     partialize: ({ refetchCounter, ...state }) => state,
   }),
 )
+
+export function htmlSafeJSON(value: unknown) {
+  return JSON.stringify(value ?? null).replace(/</g, '\\u003c')
+}

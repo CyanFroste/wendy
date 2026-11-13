@@ -6,7 +6,14 @@ import { getAllWindows, currentMonitor as getCurrentMonitor } from '@tauri-apps/
 import { Button, Chip, Code, Modal, Separator } from '@heroui/react'
 import { PiArrowClockwise, PiImageFill, PiPlus } from 'react-icons/pi'
 import { getWidget, getWidgetAsset, invokeWidgetRpc } from '@/commands'
-import { activeWidgetsStore, createWidgetWindow, extractErrorMessage, getWidgetKey, globalStore } from '@/utils'
+import {
+  activeWidgetsStore,
+  createWidgetWindow,
+  extractErrorMessage,
+  getWidgetKey,
+  globalStore,
+  htmlSafeJSON,
+} from '@/utils'
 import preludeScript from '@/scripts/widget-editor-prelude?raw'
 import commonPreludeCss from '@/scripts/common-prelude.css?raw'
 import type { ActiveWidget, Nullable, RpcRequest, RpcResponse, Widget } from '@/types'
@@ -258,22 +265,44 @@ async function createSrcDoc(widget: Widget, data?: unknown) {
   const html = await readTextFile(`${widget.path}/editor/index.html`)
   const css = await readTextFile(`${widget.path}/editor/styles.css`)
   const script = await readTextFile(`${widget.path}/editor/script.js`)
+  const csp = createCsp()
 
   return `
     <!DOCTYPE html>
     <html>
       <head>
         <meta charset="utf-8" />
-        <meta name="color-scheme" content="light dark">
+        <meta http-equiv="Content-Security-Policy" content="${csp}" />
+        <meta name="referrer" content="no-referrer" />
+        <meta name="color-scheme" content="light dark" />
         <style>${commonPreludeCss}</style>
         <style>${css}</style>
       </head>
       <body>
-        ${html}        
-        ${data ? `<script>window.widgetInstanceData = ${JSON.stringify(data)}</script>` : ''}
+        ${html}
+        <script>
+          window.widgetInstanceData = ${htmlSafeJSON(data)};
+        </script>
         <script>${preludeScript}</script>
         <script>${script}</script>
       </body>
-    </html>
-  `
+    </html>`
+}
+
+function createCsp(): string {
+  const localSources = "'self' data: blob: asset: http://asset.localhost https://asset.localhost"
+
+  return [
+    "default-src 'none'",
+    `script-src 'unsafe-inline' ${localSources}`,
+    `style-src 'unsafe-inline' ${localSources}`,
+    `img-src ${localSources}`,
+    `media-src ${localSources}`,
+    `font-src ${localSources}`,
+    `connect-src ${localSources}`,
+    "frame-src 'none'",
+    "object-src 'none'",
+    "base-uri 'none'",
+    "form-action 'none'",
+  ].join('; ')
 }

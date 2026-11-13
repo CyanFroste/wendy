@@ -1,6 +1,8 @@
 use crate::audio::AudioState;
 use crate::audio::volume_controls;
 use crate::media::{MediaCommand, MediaListener, get_active_media, send_media_command};
+use crate::network::HttpClient;
+use crate::network::HttpOptions;
 use crate::types::{
     CacheState, CpuInfo, DiskInfo, Error, MediaState, RamInfo, SystemState, Widget,
 };
@@ -14,6 +16,7 @@ use sysinfo::Disks;
 use tauri::ipc::Response;
 use tauri::{AppHandle, Emitter, Manager, State as AppState};
 use tauri_plugin_fs::FsExt;
+use url::Url;
 
 #[tauri::command]
 pub fn start_audio_capture(
@@ -102,6 +105,7 @@ pub async fn start_media_listener(
 
 #[tauri::command]
 pub async fn widget_rpc(
+    http_client: AppState<HttpClient, '_>,
     cache_state: AppState<CacheState, '_>,
     system_state: AppState<SystemState, '_>,
     widget_id: String,
@@ -123,6 +127,21 @@ pub async fn widget_rpc(
     }
 
     match method.as_str() {
+        constants::RPC_NETWORK_REQUEST => {
+            let url: Url = params["url"]
+                .as_str()
+                .ok_or_else(|| Error::new("missing parameter 'url'"))?
+                .parse()
+                .map_err(Error::from_error)?;
+            let options: Option<HttpOptions> = serde_json::from_value(params["options"].clone())?;
+
+            let data = http_client
+                .request(&url, options, &widget.allowed_domains)
+                .await?;
+
+            Ok(serde_json::to_value(&data)?)
+        }
+
         constants::RPC_SYSTEM_GET_RECYCLE_BIN_COUNT => {
             let count = tokio::task::spawn_blocking(utils::get_recycle_bin_count)
                 .await

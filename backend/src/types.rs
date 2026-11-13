@@ -43,7 +43,12 @@ pub struct Widget {
     pub permissions: Vec<String>,
     #[serde(skip_deserializing)]
     pub path: PathBuf,
-    // pub category: WidgetCategory,
+    pub author: String,
+    pub source: Option<String>,
+    #[serde(default)]
+    pub tags: Vec<String>,
+    #[serde(default)]
+    pub allowed_domains: Vec<String>,
 }
 
 #[derive(Serialize)]
