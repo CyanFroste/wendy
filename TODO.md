@@ -4,6 +4,7 @@
 - [x] show more details on widget page
 - [x] list running widgets with actions to close/delete, and manage state
 - [x] edit widget data
+- [ ] manage file scopes in ui
 - [ ] booru api
 - [ ] news api
 - [ ] weather api
@@ -14,7 +15,7 @@
 - [ ] template generator to scaffold boilerplate widget projects quickly
 - [ ] document all RPC functions and types
 - [ ] show documentation directly in the app as well
-- [ ] application icon
+- [x] application icon
 - [ ] ? expose template generator and build/dev utilities via app cli
 - [ ] ? manage state and window creation on rust side
 - [ ] ? test widget with monitor scale factor

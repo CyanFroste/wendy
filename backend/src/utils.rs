@@ -1,13 +1,10 @@
 use crate::audio::AudioState;
-use crate::types::{InstalledApp, MediaState, Widget};
+use crate::media::MediaState;
+use crate::types::Widget;
 use anyhow::Result;
-use base64::Engine;
-use base64::engine::general_purpose::STANDARD as BASE64;
 use std::fs::File;
 use std::path::PathBuf;
-use std::{env, fs};
 use tauri::{Manager, Window, WindowEvent};
-use walkdir::WalkDir;
 
 pub mod constants {
     pub const RPC_NETWORK_REQUEST: &str = "network.request";
@@ -48,19 +45,10 @@ pub fn get_rpc_required_scopes(method: &str) -> Option<&'static [&'static str]> 
 
 pub fn on_window_event(window: &Window, event: &WindowEvent) {
     if let WindowEvent::Destroyed = event {
-        let media_state = window.state::<MediaState>();
-        let listener = {
-            let mut subscribers = media_state.subscribers.lock();
-            subscribers.remove(window.label());
-
-            if subscribers.is_empty() {
-                media_state.listener.lock().take()
-            } else {
-                None
-            }
-        };
-
-        if let Some(listener) = listener {
+        if let Some(listener) = window
+            .state::<MediaState>()
+            .remove_subscriber(window.label())
+        {
             tauri::async_runtime::spawn_blocking(move || listener.stop());
         }
 
@@ -68,65 +56,6 @@ pub fn on_window_event(window: &Window, event: &WindowEvent) {
             .state::<AudioState>()
             .remove_subscriber(window.label());
     }
-}
-
-pub async fn get_installed_apps() -> Result<Vec<InstalledApp>> {
-    let mut apps = Vec::new();
-    let mut search_dirs = Vec::new();
-
-    if let Ok(var) = env::var("ProgramData") {
-        search_dirs.push(PathBuf::from(var).join(r"Microsoft\Windows\Start Menu\Programs"));
-    }
-
-    if let Ok(var) = env::var("APPDATA") {
-        search_dirs.push(PathBuf::from(var).join(r"Microsoft\Windows\Start Menu\Programs"));
-    }
-
-    for dir in search_dirs {
-        for entry in WalkDir::new(dir).into_iter().filter_map(|x| x.ok()) {
-            let path = entry.path();
-
-            if path.extension().and_then(|s| s.to_str()) == Some("lnk") {
-                let name = path
-                    .file_stem()
-                    .and_then(|s| s.to_str())
-                    .unwrap_or("Unknown")
-                    .to_string();
-
-                let lower = name.to_lowercase();
-                if lower.contains("uninstall") || lower.contains("help") {
-                    continue;
-                }
-
-                let icon_base64 = get_app_icon(path.to_string_lossy()).await?;
-                let path = path.to_path_buf();
-
-                apps.push(InstalledApp {
-                    name,
-                    path,
-                    icon_base64,
-                });
-            }
-        }
-    }
-
-    apps.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
-    apps.dedup_by(|a, b| a.name.eq_ignore_ascii_case(&b.name));
-
-    Ok(apps)
-}
-
-pub async fn get_app_icon(path: impl AsRef<str>) -> Result<Option<String>> {
-    let path = path.as_ref().to_string();
-
-    let res = tokio::task::spawn_blocking(move || {
-        systemicons::get_icon(&path, 32)
-            .ok()
-            .map(|bytes| format!("data:image/png;base64,{}", BASE64.encode(bytes)))
-    })
-    .await?;
-
-    Ok(res)
 }
 
 pub fn get_widgets(widgets_path: PathBuf) -> Result<Vec<Widget>> {
@@ -146,35 +75,4 @@ pub fn get_widgets(widgets_path: PathBuf) -> Result<Vec<Widget>> {
     }
 
     Ok(widgets)
-}
-
-pub fn get_recycle_bin_count() -> usize {
-    let mut count: usize = 0;
-
-    for drive in b'A'..=b'Z' {
-        let bin_root = PathBuf::from(format!("{}:\\$Recycle.Bin", drive as char));
-        let Ok(sid_dirs) = fs::read_dir(bin_root) else {
-            continue;
-        };
-
-        for sid in sid_dirs.flatten() {
-            let sid_path = sid.path();
-            let Ok(entries) = fs::read_dir(&sid_path) else {
-                continue;
-            };
-
-            count += entries
-                .flatten()
-                .filter(|entry| {
-                    entry
-                        .file_name()
-                        .to_str()
-                        .and_then(|n| n.strip_prefix("$I"))
-                        .is_some_and(|suffix| sid_path.join(format!("$R{suffix}")).exists())
-                })
-                .count();
-        }
-    }
-
-    count
 }

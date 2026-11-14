@@ -2,12 +2,12 @@ use anyhow::Result;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, Sample, SampleFormat, SizedSample, Stream, StreamConfig};
 use parking_lot::Mutex;
-use serde::Serialize;
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
+use volume_controls::{Volume, get_master_volume, set_master_volume, toggle_master_mute};
 
 const CHUNK_SIZE: usize = 256;
 
@@ -27,13 +27,13 @@ impl AudioState {
         }
     }
 
-    pub fn start<F>(&self, label: String, on_samples: F)
+    pub fn start_capture<F>(&self, subscriber: String, on_update: F)
     where
         F: Fn(Vec<f32>) + Send + Sync + 'static,
     {
         let this_gen = {
             let mut subscribers = self.subscribers.lock();
-            subscribers.insert(label);
+            subscribers.insert(subscriber);
 
             if self.generation.load(Ordering::SeqCst) != 0 {
                 return;
@@ -46,7 +46,7 @@ impl AudioState {
         };
 
         let generation = Arc::clone(&self.generation);
-        let on_samples = Arc::new(on_samples);
+        let on_update = Arc::new(on_update);
 
         std::thread::spawn(move || {
             while generation.load(Ordering::SeqCst) == this_gen {
@@ -59,7 +59,8 @@ impl AudioState {
                 let current_id = device.id().map(|id| id.to_string()).unwrap_or_default();
                 let (err_tx, err_rx) = mpsc::channel::<()>();
 
-                let Ok(stream) = build_stream(&device, Arc::clone(&on_samples), err_tx) else {
+                let Ok(stream) = create_generic_stream(&device, Arc::clone(&on_update), err_tx)
+                else {
                     std::thread::sleep(Duration::from_secs(1));
                     continue;
                 };
@@ -95,17 +96,33 @@ impl AudioState {
         });
     }
 
-    pub fn remove_subscriber(&self, label: &str) {
+    pub fn remove_subscriber(&self, subscriber: &str) {
         let mut subscribers = self.subscribers.lock();
-        subscribers.remove(label);
+        subscribers.remove(subscriber);
 
         if subscribers.is_empty() {
             self.generation.store(0, Ordering::SeqCst);
         }
     }
+
+    pub async fn get_master_volume(&self) -> Result<Volume> {
+        Ok(tokio::task::spawn_blocking(get_master_volume).await??)
+    }
+
+    pub async fn set_master_volume(&self, level: f32) -> Result<Volume> {
+        Ok(tokio::task::spawn_blocking(move || set_master_volume(level)).await??)
+    }
+
+    pub async fn toggle_master_mute(&self) -> Result<Volume> {
+        Ok(tokio::task::spawn_blocking(toggle_master_mute).await??)
+    }
 }
 
-fn build_stream<F>(device: &Device, on_samples: Arc<F>, err_tx: mpsc::Sender<()>) -> Result<Stream>
+fn create_generic_stream<F>(
+    device: &Device,
+    on_samples: Arc<F>,
+    err_tx: mpsc::Sender<()>,
+) -> Result<Stream>
 where
     F: Fn(Vec<f32>) + Send + Sync + 'static,
 {
@@ -113,14 +130,14 @@ where
     let format = config.sample_format();
 
     match format {
-        SampleFormat::F32 => make_stream::<f32, F>(device, config.into(), on_samples, err_tx),
-        SampleFormat::I16 => make_stream::<i16, F>(device, config.into(), on_samples, err_tx),
-        SampleFormat::U16 => make_stream::<u16, F>(device, config.into(), on_samples, err_tx),
+        SampleFormat::F32 => create_stream::<f32, F>(device, config.into(), on_samples, err_tx),
+        SampleFormat::I16 => create_stream::<i16, F>(device, config.into(), on_samples, err_tx),
+        SampleFormat::U16 => create_stream::<u16, F>(device, config.into(), on_samples, err_tx),
         _ => Err(anyhow::anyhow!("unsupported format: {format:?}")),
     }
 }
 
-fn make_stream<T, F>(
+fn create_stream<T, F>(
     device: &Device,
     config: StreamConfig,
     on_samples: Arc<F>,
@@ -202,15 +219,9 @@ where
     buckets
 }
 
-#[derive(Serialize, Clone, Debug)]
-pub struct Volume {
-    pub level: f32, // 0.0 ..= 1.0
-    pub muted: bool,
-}
-
 pub mod volume_controls {
-    use super::Volume;
     use anyhow::Result;
+    use serde::Serialize;
     use windows::Win32::Media::Audio::Endpoints::IAudioEndpointVolume;
     use windows::Win32::Media::Audio::{
         IMMDeviceEnumerator, MMDeviceEnumerator, eMultimedia, eRender,
@@ -219,6 +230,12 @@ pub mod volume_controls {
         CLSCTX_ALL, COINIT_MULTITHREADED, CoCreateInstance, CoInitializeEx, CoUninitialize,
     };
     use windows::core::GUID;
+
+    #[derive(Serialize, Clone, Debug)]
+    pub struct Volume {
+        pub level: f32, // 0.0 ..= 1.0
+        pub muted: bool,
+    }
 
     struct ComScope(bool);
 
@@ -253,7 +270,7 @@ pub mod volume_controls {
         }
     }
 
-    pub fn get_volume() -> Result<Volume> {
+    pub fn get_master_volume() -> Result<Volume> {
         with_endpoint(|ep| unsafe {
             Ok(Volume {
                 level: ep.GetMasterVolumeLevelScalar()?,
@@ -262,7 +279,7 @@ pub mod volume_controls {
         })
     }
 
-    pub fn set_volume(level: f32) -> Result<Volume> {
+    pub fn set_master_volume(level: f32) -> Result<Volume> {
         let clamped = level.clamp(0.0, 1.0);
         with_endpoint(|ep| unsafe {
             ep.SetMasterVolumeLevelScalar(clamped, &GUID::zeroed())?;
@@ -279,7 +296,7 @@ pub mod volume_controls {
         })
     }
 
-    pub fn toggle_mute() -> Result<Volume> {
+    pub fn toggle_master_mute() -> Result<Volume> {
         with_endpoint(|ep| unsafe {
             let next_mute = !ep.GetMute()?.as_bool();
 

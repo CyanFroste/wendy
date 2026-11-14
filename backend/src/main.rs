@@ -5,33 +5,24 @@ mod audio;
 mod commands;
 mod media;
 mod network;
+mod system;
 mod types;
 mod utils;
 
 use anyhow::Result;
 use audio::AudioState;
+use media::MediaState;
 use network::HttpClient;
-use sysinfo::{CpuRefreshKind, MemoryRefreshKind, RefreshKind, System};
-use types::{CacheState, MediaState, SystemState};
+use system::SystemState;
+use types::CacheState;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let mut system = System::new_with_specifics(
-        RefreshKind::nothing()
-            .with_cpu(CpuRefreshKind::everything())
-            .with_memory(MemoryRefreshKind::everything()),
-    )?;
-
-    system.refresh_cpu_all();
-    system.refresh_memory();
-
     let http_client = HttpClient::new(5, 10 * 1024 * 1024)?; // 10MB
-    let system_state = SystemState::new(system);
+    let cache_state = CacheState::default();
     let media_state = MediaState::default();
     let audio_state = AudioState::new();
-    let mut cache_state = CacheState::default();
-
-    cache_state.installed_apps = utils::get_installed_apps().await?;
+    let system_state = SystemState::new()?;
 
     tauri::Builder::default()
         .plugin(tauri_plugin_store::Builder::new().build())

@@ -1,32 +1,11 @@
-use crate::media::MediaListener;
-use parking_lot::{Mutex, RwLock};
+use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashSet};
+use std::collections::BTreeMap;
 use std::path::PathBuf;
-use sysinfo::System;
 
 #[derive(Default)]
 pub struct CacheState {
     pub widgets_cache: RwLock<BTreeMap<String, Widget>>,
-    pub installed_apps: Vec<InstalledApp>,
-}
-
-pub struct SystemState {
-    pub system: Mutex<System>,
-}
-
-#[derive(Default)]
-pub struct MediaState {
-    pub listener: Mutex<Option<MediaListener>>,
-    pub subscribers: Mutex<HashSet<String>>,
-}
-
-impl SystemState {
-    pub fn new(system: System) -> Self {
-        Self {
-            system: Mutex::new(system),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -49,44 +28,6 @@ pub struct Widget {
     pub tags: Vec<String>,
     #[serde(default)]
     pub allowed_domains: Vec<String>,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CpuInfo {
-    pub brand: String,
-    pub global_usage: f32,
-    pub core_count: usize,
-    pub core_usages: Vec<f32>,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RamInfo {
-    pub total_bytes: u64,
-    pub used_bytes: u64,
-    pub available_bytes: u64,
-    pub swap_total_bytes: u64,
-    pub swap_used_bytes: u64,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DiskInfo {
-    pub name: String,
-    pub mount_point: String,
-    pub file_system: String,
-    pub total_bytes: u64,
-    pub available_bytes: u64,
-    pub is_removable: bool,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct InstalledApp {
-    pub name: String,
-    pub path: PathBuf,
-    pub icon_base64: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]

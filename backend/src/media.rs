@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::OnceCell;
 use windows::Foundation::TypedEventHandler;
 use windows::Media::Control::{
     CurrentSessionChangedEventArgs, GlobalSystemMediaTransportControlsSession as MediaSession,
@@ -17,100 +18,90 @@ use windows::Storage::Streams::{Buffer, DataReader, InputStreamOptions};
 use windows::System::AppDiagnosticInfo;
 use windows::core::HSTRING;
 
-#[derive(Serialize, Clone, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct MediaTimeline {
-    pub start_ms: u64,
-    pub end_ms: u64,
-    pub position_ms: u64,
-    pub can_seek: bool,
+#[derive(Default)]
+pub struct MediaState {
+    manager: OnceCell<MediaSessionManager>,
+    pub listener: Mutex<Option<MediaListener>>,
+    pub subscribers: Mutex<HashSet<String>>,
 }
 
-#[derive(Serialize, Clone, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct MediaControls {
-    pub can_play: bool,
-    pub can_pause: bool,
-    pub can_toggle: bool,
-    pub can_next: bool,
-    pub can_prev: bool,
-}
-
-#[derive(Serialize, Clone, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct MediaSessionInfo {
-    pub player_id: String,
-    pub player_name: String,
-    pub title: String,
-    pub artist: String,
-    pub album: String,
-    pub is_playing: bool,
-    pub is_current: bool,
-    pub thumbnail: Vec<u8>,
-    pub controls: MediaControls,
-    pub timeline: Option<MediaTimeline>,
-}
-
-#[derive(Deserialize, Debug)]
-#[serde(tag = "type", rename_all = "kebab-case")]
-pub enum MediaCommand {
-    Play,
-    Pause,
-    Toggle,
-    Next,
-    Prev,
-    #[serde(rename_all = "camelCase")]
-    Seek {
-        position_ms: u64,
-    },
-}
-
-/// Trailing-edge debouncer so rapid bursts of WinRT events settle before notifying the UI.
-#[derive(Clone)]
-struct TrailingDebouncer {
-    pending: Arc<Mutex<bool>>,
-    rt: tokio::runtime::Handle,
-    on_emit: Arc<dyn Fn() + Send + Sync>,
-}
-
-impl TrailingDebouncer {
-    fn new<F>(on_emit: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        Self {
-            pending: Arc::new(Mutex::new(false)),
-            rt: tokio::runtime::Handle::current(),
-            on_emit: Arc::new(on_emit),
-        }
+impl MediaState {
+    pub async fn manager(&self) -> Result<&MediaSessionManager> {
+        self.manager
+            .get_or_try_init(|| async { Ok(MediaSessionManager::RequestAsync()?.await?) })
+            .await
     }
 
-    fn trigger(&self) {
-        let mut pending = self.pending.lock();
-        if *pending {
-            return;
+    pub async fn get_active_media(&self) -> Result<Option<MediaSessionInfo>> {
+        let manager = self.manager().await?;
+
+        if let Ok(current) = manager.GetCurrentSession() {
+            if let Some(info) = parse_session(&current, true).await {
+                return Ok(Some(info));
+            }
         }
 
-        *pending = true;
-        drop(pending);
+        if let Ok(sessions) = manager.GetSessions() {
+            for session in sessions {
+                if let Some(info) = parse_session(&session, false).await {
+                    return Ok(Some(info));
+                }
+            }
+        }
 
-        let pending = Arc::clone(&self.pending);
-        let on_emit = Arc::clone(&self.on_emit);
-
-        self.rt.spawn(async move {
-            tokio::time::sleep(Duration::from_millis(200)).await;
-
-            *pending.lock() = false;
-            on_emit();
-        });
+        Ok(None)
     }
-}
 
-struct SessionEntry {
-    session: MediaSession,
-    metadata_token: i64,
-    playback_token: i64,
-    timeline_token: i64,
+    pub async fn send_command(&self, player_id: String, cmd: MediaCommand) -> Result<()> {
+        let manager = self.manager().await?;
+
+        let session = manager
+            .GetSessions()?
+            .into_iter()
+            .find(|s| {
+                s.SourceAppUserModelId()
+                    .map(|id| id.to_string() == player_id)
+                    .unwrap_or(false)
+            })
+            .or_else(|| manager.GetCurrentSession().ok())
+            .ok_or_else(|| anyhow::anyhow!("No active media session found"))?;
+
+        match cmd {
+            MediaCommand::Play => {
+                session.TryPlayAsync()?.await?;
+            }
+            MediaCommand::Pause => {
+                session.TryPauseAsync()?.await?;
+            }
+            MediaCommand::Toggle => {
+                session.TryTogglePlayPauseAsync()?.await?;
+            }
+            MediaCommand::Next => {
+                session.TrySkipNextAsync()?.await?;
+            }
+            MediaCommand::Prev => {
+                session.TrySkipPreviousAsync()?.await?;
+            }
+            MediaCommand::Seek { position_ms } => {
+                let ticks = (Duration::from_millis(position_ms).as_nanos() / 100) as i64;
+
+                session.TryChangePlaybackPositionAsync(ticks)?.await?;
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn remove_subscriber(&self, subscriber: &str) -> Option<MediaListener> {
+        let mut subscribers = self.subscribers.lock();
+        subscribers.remove(subscriber);
+
+        if subscribers.is_empty() {
+            self.listener.lock().take()
+        } else {
+            None
+        }
+    }
 }
 
 pub struct MediaListener {
@@ -186,6 +177,102 @@ impl MediaListener {
                 .RemoveTimelinePropertiesChanged(entry.timeline_token);
         }
     }
+}
+
+/// Trailing-edge debouncer so rapid bursts of WinRT events settle before notifying the UI.
+#[derive(Clone)]
+struct TrailingDebouncer {
+    pending: Arc<Mutex<bool>>,
+    rt: tokio::runtime::Handle,
+    on_emit: Arc<dyn Fn() + Send + Sync>,
+}
+
+impl TrailingDebouncer {
+    fn new<F>(on_emit: F) -> Self
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
+        Self {
+            pending: Arc::new(Mutex::new(false)),
+            rt: tokio::runtime::Handle::current(),
+            on_emit: Arc::new(on_emit),
+        }
+    }
+
+    fn trigger(&self) {
+        let mut pending = self.pending.lock();
+        if *pending {
+            return;
+        }
+
+        *pending = true;
+        drop(pending);
+
+        let pending = Arc::clone(&self.pending);
+        let on_emit = Arc::clone(&self.on_emit);
+
+        self.rt.spawn(async move {
+            tokio::time::sleep(Duration::from_millis(200)).await;
+
+            *pending.lock() = false;
+            on_emit();
+        });
+    }
+}
+
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct MediaTimeline {
+    pub start_ms: u64,
+    pub end_ms: u64,
+    pub position_ms: u64,
+    pub can_seek: bool,
+}
+
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct MediaControls {
+    pub can_play: bool,
+    pub can_pause: bool,
+    pub can_toggle: bool,
+    pub can_next: bool,
+    pub can_prev: bool,
+}
+
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct MediaSessionInfo {
+    pub player_id: String,
+    pub player_name: String,
+    pub title: String,
+    pub artist: String,
+    pub album: String,
+    pub is_playing: bool,
+    pub is_current: bool,
+    pub thumbnail: Vec<u8>,
+    pub controls: MediaControls,
+    pub timeline: Option<MediaTimeline>,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(tag = "type", rename_all = "kebab-case")]
+pub enum MediaCommand {
+    Play,
+    Pause,
+    Toggle,
+    Next,
+    Prev,
+    #[serde(rename_all = "camelCase")]
+    Seek {
+        position_ms: u64,
+    },
+}
+
+struct SessionEntry {
+    session: MediaSession,
+    metadata_token: i64,
+    playback_token: i64,
+    timeline_token: i64,
 }
 
 fn sync_sessions(
@@ -411,64 +498,4 @@ async fn parse_session(session: &MediaSession, is_current: bool) -> Option<Media
         },
         timeline,
     })
-}
-
-pub async fn get_active_media() -> Result<Option<MediaSessionInfo>> {
-    let manager = MediaSessionManager::RequestAsync()?.await?;
-
-    if let Ok(current) = manager.GetCurrentSession() {
-        if let Some(info) = parse_session(&current, true).await {
-            return Ok(Some(info));
-        }
-    }
-
-    if let Ok(sessions) = manager.GetSessions() {
-        for session in sessions {
-            if let Some(info) = parse_session(&session, false).await {
-                return Ok(Some(info));
-            }
-        }
-    }
-
-    Ok(None)
-}
-
-pub async fn send_media_command(player_id: String, cmd: MediaCommand) -> Result<()> {
-    let manager = MediaSessionManager::RequestAsync()?.await?;
-
-    let session = manager
-        .GetSessions()?
-        .into_iter()
-        .find(|s| {
-            s.SourceAppUserModelId()
-                .map(|id| id.to_string() == player_id)
-                .unwrap_or(false)
-        })
-        .or_else(|| manager.GetCurrentSession().ok())
-        .ok_or_else(|| anyhow::anyhow!("No active media session found"))?;
-
-    match cmd {
-        MediaCommand::Play => {
-            session.TryPlayAsync()?.await?;
-        }
-        MediaCommand::Pause => {
-            session.TryPauseAsync()?.await?;
-        }
-        MediaCommand::Toggle => {
-            session.TryTogglePlayPauseAsync()?.await?;
-        }
-        MediaCommand::Next => {
-            session.TrySkipNextAsync()?.await?;
-        }
-        MediaCommand::Prev => {
-            session.TrySkipPreviousAsync()?.await?;
-        }
-        MediaCommand::Seek { position_ms } => {
-            let ticks = (Duration::from_millis(position_ms).as_nanos() / 100) as i64;
-
-            session.TryChangePlaybackPositionAsync(ticks)?.await?;
-        }
-    }
-
-    Ok(())
 }

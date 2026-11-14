@@ -1,18 +1,16 @@
 use crate::audio::AudioState;
-use crate::audio::volume_controls;
-use crate::media::{MediaCommand, MediaListener, get_active_media, send_media_command};
+use crate::media::MediaState;
+use crate::media::{MediaCommand, MediaListener};
 use crate::network::HttpClient;
 use crate::network::HttpOptions;
-use crate::types::{
-    CacheState, CpuInfo, DiskInfo, Error, MediaState, RamInfo, SystemState, Widget,
-};
+use crate::system::SystemState;
+use crate::types::{CacheState, Error, Widget};
 use crate::utils;
 use crate::utils::constants;
 use serde_json::Value as JsonValue;
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
-use sysinfo::Disks;
 use tauri::ipc::Response;
 use tauri::{AppHandle, Emitter, Manager, State as AppState};
 use tauri_plugin_fs::FsExt;
@@ -21,13 +19,13 @@ use url::Url;
 #[tauri::command]
 pub fn start_audio_capture(
     app_handle: AppHandle,
-    audio_state: AppState<'_, AudioState>,
+    audio_state: AppState<AudioState, '_>,
     window_label: String,
 ) {
     let app_handle = app_handle.clone();
 
-    audio_state.start(window_label, move |chunk| {
-        let subs: Vec<String> = app_handle
+    audio_state.start_capture(window_label, move |chunk| {
+        let subscribers: Vec<String> = app_handle
             .state::<AudioState>()
             .subscribers
             .lock()
@@ -35,8 +33,8 @@ pub fn start_audio_capture(
             .cloned()
             .collect();
 
-        for label in subs {
-            let _ = app_handle.emit_to(&label, "audio-captured", &chunk);
+        for subscriber in subscribers {
+            let _ = app_handle.emit_to(&subscriber, "audio-captured", &chunk);
         }
     });
 }
@@ -44,11 +42,12 @@ pub fn start_audio_capture(
 #[tauri::command]
 pub async fn start_media_listener(
     app_handle: AppHandle,
-    media_state: AppState<'_, MediaState>,
+    media_state: AppState<MediaState, '_>,
     window_label: String,
 ) -> Result<(), Error> {
     let is_started = {
         let mut subscribers = media_state.subscribers.lock();
+
         subscribers.insert(window_label);
         media_state.listener.lock().is_some()
     };
@@ -66,19 +65,15 @@ pub async fn start_media_listener(
             let app_handle = app_handle.clone();
 
             tokio::task::spawn_blocking(move || {
-                let subscribers: Vec<String> = app_handle
-                    .state::<MediaState>()
-                    .subscribers
-                    .lock()
-                    .iter()
-                    .cloned()
-                    .collect();
+                let media_state = app_handle.state::<MediaState>();
+                let subscribers: Vec<String> =
+                    media_state.subscribers.lock().iter().cloned().collect();
 
                 if subscribers.is_empty() {
                     return;
                 }
 
-                if let Ok(data) = rt.block_on(get_active_media()) {
+                if let Ok(data) = rt.block_on(media_state.get_active_media()) {
                     for subscriber in subscribers {
                         let _ = app_handle.emit_to(&subscriber, "media-updated", &data);
                     }
@@ -105,8 +100,11 @@ pub async fn start_media_listener(
 
 #[tauri::command]
 pub async fn widget_rpc(
+    app_handle: AppHandle,
     http_client: AppState<HttpClient, '_>,
     cache_state: AppState<CacheState, '_>,
+    media_state: AppState<MediaState, '_>,
+    audio_state: AppState<AudioState, '_>,
     system_state: AppState<SystemState, '_>,
     widget_id: String,
     method: String,
@@ -142,24 +140,8 @@ pub async fn widget_rpc(
             Ok(serde_json::to_value(&data)?)
         }
 
-        constants::RPC_SYSTEM_GET_RECYCLE_BIN_COUNT => {
-            let count = tokio::task::spawn_blocking(utils::get_recycle_bin_count)
-                .await
-                .map_err(Error::from_error)?;
-
-            Ok(JsonValue::Number(count.into()))
-        }
-
-        constants::RPC_SYSTEM_OPEN_RECYCLE_BIN => {
-            open::that_detached("shell:RecycleBinFolder")?;
-
-            Ok(JsonValue::Null)
-        }
-
         constants::RPC_AUDIO_GET_MASTER_VOLUME => {
-            let data = tokio::task::spawn_blocking(volume_controls::get_volume)
-                .await
-                .map_err(Error::from_error)??;
+            let data = audio_state.get_master_volume().await?;
 
             Ok(serde_json::to_value(&data)?)
         }
@@ -169,27 +151,26 @@ pub async fn widget_rpc(
                 .as_f64()
                 .ok_or_else(|| Error::new("missing parameter 'level'"))?;
             let level = level.clamp(0.0, 1.0) as f32;
-
-            let data = tokio::task::spawn_blocking(move || volume_controls::set_volume(level))
-                .await
-                .map_err(Error::from_error)??;
+            let data = audio_state.set_master_volume(level).await?;
 
             Ok(serde_json::to_value(&data)?)
         }
 
         constants::RPC_AUDIO_TOGGLE_MASTER_MUTE => {
-            let data = tokio::task::spawn_blocking(volume_controls::toggle_mute)
-                .await
-                .map_err(Error::from_error)??;
+            let data = audio_state.toggle_master_mute().await?;
 
             Ok(serde_json::to_value(&data)?)
         }
 
         constants::RPC_MEDIA_GET_ACTIVE_MEDIA => {
             let rt = tokio::runtime::Handle::current();
-            let data = tokio::task::spawn_blocking(move || rt.block_on(get_active_media()))
-                .await
-                .map_err(Error::from_error)??;
+            let app_handle = app_handle.clone();
+
+            let data = tokio::task::spawn_blocking(move || {
+                rt.block_on(app_handle.state::<MediaState>().get_active_media())
+            })
+            .await
+            .map_err(Error::from_error)??;
 
             Ok(serde_json::to_value(&data)?)
         }
@@ -201,65 +182,31 @@ pub async fn widget_rpc(
                 .to_string();
             let command: MediaCommand = serde_json::from_value(params["command"].clone())?;
 
-            send_media_command(player_id, command).await?;
+            media_state.send_command(player_id, command).await?;
 
             Ok(JsonValue::Null)
         }
 
         constants::RPC_SYSTEM_GET_CPU_INFO => {
-            let mut system = system_state.system.lock();
-
-            system.refresh_cpu_all();
-
-            let cpus = system.cpus();
-            let data = CpuInfo {
-                brand: cpus
-                    .first()
-                    .map(|c| c.brand().to_string())
-                    .unwrap_or_default(),
-                global_usage: system.global_cpu_usage(),
-                core_count: cpus.len(),
-                core_usages: cpus.iter().map(|c| c.usage()).collect(),
-            };
+            let data = system_state.get_cpu_info();
 
             Ok(serde_json::to_value(&data)?)
         }
 
         constants::RPC_SYSTEM_GET_RAM_INFO => {
-            let mut system = system_state.system.lock();
-
-            system.refresh_memory();
-
-            let data = RamInfo {
-                total_bytes: system.total_memory(),
-                used_bytes: system.used_memory(),
-                available_bytes: system.available_memory(),
-                swap_total_bytes: system.total_swap(),
-                swap_used_bytes: system.used_swap(),
-            };
+            let data = system_state.get_ram_info();
 
             Ok(serde_json::to_value(&data)?)
         }
 
         constants::RPC_SYSTEM_GET_DISK_INFO => {
-            let disks = Disks::new_with_refreshed_list()?;
-            let data: Vec<DiskInfo> = disks
-                .iter()
-                .map(|disk| DiskInfo {
-                    name: disk.name().to_string_lossy().to_string(),
-                    mount_point: disk.mount_point().to_string_lossy().to_string(),
-                    file_system: disk.file_system().to_string_lossy().to_string(),
-                    total_bytes: disk.total_space(),
-                    available_bytes: disk.available_space(),
-                    is_removable: disk.is_removable(),
-                })
-                .collect();
+            let data = system_state.get_disk_info()?;
 
             Ok(serde_json::to_value(&data)?)
         }
 
         constants::RPC_SYSTEM_GET_INSTALLED_APPS => {
-            Ok(serde_json::to_value(&cache_state.installed_apps)?)
+            Ok(serde_json::to_value(&system_state.installed_apps)?)
         }
 
         constants::RPC_SYSTEM_OPEN_INSTALLED_APP => {
@@ -268,12 +215,24 @@ pub async fn widget_rpc(
                 .ok_or_else(|| Error::new("missing parameter 'path'"))?;
             let path = PathBuf::from(path);
 
-            if !cache_state.installed_apps.iter().any(|x| x.path == path) {
+            if !system_state.installed_apps.iter().any(|x| x.path == path) {
                 return Err(Error::new("invalid application path"));
             }
 
             // ! NOTE: need to make sure this doesn't make the launched app bound to the current process
             open::that_detached(path)?;
+
+            Ok(JsonValue::Null)
+        }
+
+        constants::RPC_SYSTEM_GET_RECYCLE_BIN_COUNT => {
+            let count = system_state.get_recycle_bin_count().await?;
+
+            Ok(JsonValue::Number(count.into()))
+        }
+
+        constants::RPC_SYSTEM_OPEN_RECYCLE_BIN => {
+            open::that_detached("shell:RecycleBinFolder")?;
 
             Ok(JsonValue::Null)
         }
