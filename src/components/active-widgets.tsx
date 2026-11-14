@@ -2,15 +2,13 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import { getAllWindows } from '@tauri-apps/api/window'
-import { useStore } from 'zustand'
 import { Button } from '@heroui/react'
 import { PiImageFill, PiNotePencil, PiTrash } from 'react-icons/pi'
-import { activeWidgetsStore, getWidgetKey, globalStore } from '@/utils'
+import { activeWidgetsStore, getWidgetKey } from '@/utils'
 import type { ActiveWidget } from '@/types'
 
 export function ActiveWidgets() {
   const navigate = useNavigate()
-  const store = useStore(globalStore)
   const [activeWidgets, setActiveWidgets] = useState<ActiveWidget[]>([])
 
   const onRemove = async (widget: ActiveWidget) => {
@@ -26,11 +24,17 @@ export function ActiveWidgets() {
   }
 
   useEffect(() => {
-    ;(async () => {
-      if (store.refetchCounter > 0) await activeWidgetsStore.reload()
-      setActiveWidgets(await activeWidgetsStore.values<ActiveWidget>())
-    })()
-  }, [store.refetchCounter])
+    activeWidgetsStore.values<ActiveWidget>().then(setActiveWidgets)
+
+    const activeWidgetsStoreListener = activeWidgetsStore.onChange<ActiveWidget>((key, value) => {
+      if (!value) setActiveWidgets(prev => prev.filter(it => getWidgetKey(it.meta.id, it.instanceId) !== key))
+      else if (value) setActiveWidgets(prev => prev.concat(value))
+    })
+
+    return () => {
+      activeWidgetsStoreListener.then(fn => fn())
+    }
+  }, [])
 
   return (
     <div className="h-full flex flex-col px-2 overflow-auto divide-y divide-surface">

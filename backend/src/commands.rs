@@ -1,6 +1,6 @@
 use crate::audio::AudioState;
+use crate::media::MediaCommand;
 use crate::media::MediaState;
-use crate::media::{MediaCommand, MediaListener};
 use crate::network::HttpClient;
 use crate::network::HttpOptions;
 use crate::system::SystemState;
@@ -45,26 +45,14 @@ pub async fn start_media_listener(
     media_state: AppState<MediaState, '_>,
     window_label: String,
 ) -> Result<(), Error> {
-    let is_started = {
-        let mut subscribers = media_state.subscribers.lock();
-
-        subscribers.insert(window_label);
-        media_state.listener.lock().is_some()
-    };
-
-    if is_started {
-        return Ok(());
-    }
-
-    let app_handle = app_handle.clone();
     let rt = tokio::runtime::Handle::current();
 
-    let listener = tokio::task::spawn_blocking(move || {
-        rt.block_on(MediaListener::start(move || {
-            let rt = tokio::runtime::Handle::current();
+    media_state
+        .start_listener(window_label, move || {
             let app_handle = app_handle.clone();
+            let rt = rt.clone();
 
-            tokio::task::spawn_blocking(move || {
+            rt.clone().spawn_blocking(move || {
                 let media_state = app_handle.state::<MediaState>();
                 let subscribers: Vec<String> =
                     media_state.subscribers.lock().iter().cloned().collect();
@@ -79,25 +67,13 @@ pub async fn start_media_listener(
                     }
                 }
             });
-        }))
-    })
-    .await
-    .map_err(Error::from_error)??;
-
-    let subscribers: Vec<String> = media_state.subscribers.lock().iter().cloned().collect();
-    let mut guard = media_state.listener.lock();
-
-    if subscribers.is_empty() {
-        listener.stop();
-    } else if guard.is_none() {
-        *guard = Some(listener);
-    } else {
-        listener.stop();
-    }
+        })
+        .await?;
 
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub async fn widget_rpc(
     app_handle: AppHandle,
@@ -164,10 +140,12 @@ pub async fn widget_rpc(
 
         constants::RPC_MEDIA_GET_ACTIVE_MEDIA => {
             let rt = tokio::runtime::Handle::current();
-            let app_handle = app_handle.clone();
 
             let data = tokio::task::spawn_blocking(move || {
-                rt.block_on(app_handle.state::<MediaState>().get_active_media())
+                let app_handle = app_handle.clone();
+                let media_state = app_handle.state::<MediaState>();
+
+                rt.block_on(media_state.get_active_media())
             })
             .await
             .map_err(Error::from_error)??;

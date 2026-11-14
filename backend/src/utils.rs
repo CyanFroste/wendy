@@ -1,10 +1,7 @@
-use crate::audio::AudioState;
-use crate::media::MediaState;
 use crate::types::Widget;
 use anyhow::Result;
 use std::fs::File;
 use std::path::PathBuf;
-use tauri::{Manager, Window, WindowEvent};
 
 pub mod constants {
     pub const RPC_NETWORK_REQUEST: &str = "network.request";
@@ -40,21 +37,6 @@ pub fn get_rpc_required_scopes(method: &str) -> Option<&'static [&'static str]> 
         RPC_SYSTEM_OPEN_RECYCLE_BIN => Some(&["system:exec"]),
         RPC_SYSTEM_GET_RECYCLE_BIN_COUNT => Some(&["system:read"]),
         _ => None,
-    }
-}
-
-pub fn on_window_event(window: &Window, event: &WindowEvent) {
-    if let WindowEvent::Destroyed = event {
-        if let Some(listener) = window
-            .state::<MediaState>()
-            .remove_subscriber(window.label())
-        {
-            tauri::async_runtime::spawn_blocking(move || listener.stop());
-        }
-
-        window
-            .state::<AudioState>()
-            .remove_subscriber(window.label());
     }
 }
 

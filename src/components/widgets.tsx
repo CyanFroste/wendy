@@ -52,10 +52,7 @@ export function Widgets() {
   }, [widgets])
 
   useEffect(() => {
-    ;(async () => {
-      const data = await getWidgets(store.widgetsPath)
-      setWidgets(data)
-    })()
+    getWidgets(store.widgetsPath).then(setWidgets)
   }, [store.widgetsPath, store.refetchCounter])
 
   return (

@@ -14,6 +14,7 @@ use audio::AudioState;
 use media::MediaState;
 use network::HttpClient;
 use system::SystemState;
+use tauri::{Manager, WindowEvent};
 use types::CacheState;
 
 #[tokio::main]
@@ -36,7 +37,16 @@ async fn main() -> Result<()> {
         .manage(system_state)
         .manage(media_state)
         .manage(audio_state)
-        .on_window_event(utils::on_window_event)
+        .on_window_event(|window, event| {
+            if let WindowEvent::Destroyed = event {
+                window
+                    .state::<MediaState>()
+                    .remove_subscriber(window.label());
+                window
+                    .state::<AudioState>()
+                    .remove_subscriber(window.label());
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             commands::widget_rpc,
             commands::get_widgets,

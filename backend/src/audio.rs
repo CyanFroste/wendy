@@ -106,15 +106,15 @@ impl AudioState {
     }
 
     pub async fn get_master_volume(&self) -> Result<Volume> {
-        Ok(tokio::task::spawn_blocking(get_master_volume).await??)
+        tokio::task::spawn_blocking(get_master_volume).await?
     }
 
     pub async fn set_master_volume(&self, level: f32) -> Result<Volume> {
-        Ok(tokio::task::spawn_blocking(move || set_master_volume(level)).await??)
+        tokio::task::spawn_blocking(move || set_master_volume(level)).await?
     }
 
     pub async fn toggle_master_mute(&self) -> Result<Volume> {
-        Ok(tokio::task::spawn_blocking(toggle_master_mute).await??)
+        tokio::task::spawn_blocking(toggle_master_mute).await?
     }
 }
 

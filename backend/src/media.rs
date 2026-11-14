@@ -35,10 +35,10 @@ impl MediaState {
     pub async fn get_active_media(&self) -> Result<Option<MediaSessionInfo>> {
         let manager = self.manager().await?;
 
-        if let Ok(current) = manager.GetCurrentSession() {
-            if let Some(info) = parse_session(&current, true).await {
-                return Ok(Some(info));
-            }
+        if let Ok(current) = manager.GetCurrentSession()
+            && let Some(info) = parse_session(&current, true).await
+        {
+            return Ok(Some(info));
         }
 
         if let Ok(sessions) = manager.GetSessions() {
@@ -60,7 +60,7 @@ impl MediaState {
             .into_iter()
             .find(|s| {
                 s.SourceAppUserModelId()
-                    .map(|id| id.to_string() == player_id)
+                    .map(|id| id == player_id)
                     .unwrap_or(false)
             })
             .or_else(|| manager.GetCurrentSession().ok())
@@ -92,15 +92,56 @@ impl MediaState {
         Ok(())
     }
 
-    pub fn remove_subscriber(&self, subscriber: &str) -> Option<MediaListener> {
-        let mut subscribers = self.subscribers.lock();
-        subscribers.remove(subscriber);
+    pub fn remove_subscriber(&self, subscriber: &str) {
+        let should_stop = {
+            let mut subscribers = self.subscribers.lock();
+            subscribers.remove(subscriber);
+            subscribers.is_empty()
+        };
 
-        if subscribers.is_empty() {
-            self.listener.lock().take()
-        } else {
-            None
+        if should_stop && let Some(listener) = self.listener.lock().take() {
+            tokio::task::spawn_blocking(move || listener.stop());
         }
+    }
+
+    pub async fn start_listener<F>(&self, subscriber: String, on_update: F) -> Result<()>
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
+        let is_started = {
+            let mut subscribers = self.subscribers.lock();
+            subscribers.insert(subscriber);
+            self.listener.lock().is_some()
+        };
+
+        if is_started {
+            return Ok(());
+        }
+
+        let rt = tokio::runtime::Handle::current();
+
+        let listener =
+            tokio::task::spawn_blocking(move || rt.block_on(MediaListener::start(on_update)))
+                .await??;
+
+        let listener = {
+            let subscribers = self.subscribers.lock();
+            let mut guard = self.listener.lock();
+
+            if !subscribers.is_empty() && guard.is_none() {
+                *guard = Some(listener);
+
+                None
+            } else {
+                Some(listener)
+            }
+        };
+
+        if let Some(listener) = listener {
+            tokio::task::spawn_blocking(move || listener.stop());
+        }
+
+        Ok(())
     }
 }
 
@@ -368,20 +409,18 @@ fn sync_sessions(
 }
 
 async fn resolve_player_name(app_id: &str) -> String {
-    if let Ok(op) = AppDiagnosticInfo::RequestInfoForAppUserModelId(&HSTRING::from(app_id)) {
-        if let Ok(iter) = op.await {
-            if let Some(diag) = iter.into_iter().next() {
-                if let Ok(name) = diag
-                    .AppInfo()
-                    .and_then(|a| a.DisplayInfo())
-                    .and_then(|d| d.DisplayName())
-                {
-                    let s = name.to_string_lossy();
-                    if !s.is_empty() {
-                        return s;
-                    }
-                }
-            }
+    if let Ok(op) = AppDiagnosticInfo::RequestInfoForAppUserModelId(&HSTRING::from(app_id))
+        && let Ok(iter) = op.await
+        && let Some(diag) = iter.into_iter().next()
+        && let Ok(name) = diag
+            .AppInfo()
+            .and_then(|a| a.DisplayInfo())
+            .and_then(|d| d.DisplayName())
+    {
+        let s = name.to_string_lossy();
+
+        if !s.is_empty() {
+            return s;
         }
     }
 

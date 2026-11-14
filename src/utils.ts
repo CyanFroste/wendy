@@ -4,7 +4,7 @@ import { attach as attachWindowAsWallpaper, setInteractive } from 'tauri-plugin-
 import { createStore } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { startAudioCapture, startMediaListener } from '@/commands'
-import type { ActiveWidget } from '@/types'
+import type { ActiveWidget, MediaSessionInfo, Nullable } from '@/types'
 
 export const activeWidgetsStore = await loadStore('active-widgets-store.json', { autoSave: false })
 
@@ -90,4 +90,8 @@ export const globalStore = createStore<GlobalStore>()(
 
 export function htmlSafeJSON(value: unknown) {
   return JSON.stringify(value ?? null).replace(/</g, '\\u003c')
+}
+
+export function normalizeMediaSessionInfo(data?: Nullable<MediaSessionInfo>) {
+  if (data) return { ...data, thumbnail: new Uint8Array(data.thumbnail) }
 }

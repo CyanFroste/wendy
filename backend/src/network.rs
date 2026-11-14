@@ -173,10 +173,10 @@ async fn validate_url(url: &Url, allowed_domains: &[impl AsRef<str>]) -> Result<
         return Err(anyhow!("localhost is not allowed"));
     }
 
-    if let Ok(ip) = host.parse::<IpAddr>() {
-        if is_blocked_ip(ip) {
-            return Err(anyhow!("IP address '{host}' is blocked"));
-        }
+    if let Ok(ip) = host.parse::<IpAddr>()
+        && is_blocked_ip(ip)
+    {
+        return Err(anyhow!("IP address '{host}' is blocked"));
     }
 
     let domain_allowed = allowed_domains.iter().any(|allowed| {

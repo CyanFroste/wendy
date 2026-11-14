@@ -10,7 +10,7 @@ import { cn } from '@heroui/styles'
 import formatBytes from 'pretty-bytes'
 import { PiLockKey, PiLockKeyOpen, PiNotePencil, PiPushPin, PiPushPinSlash, PiTrash } from 'react-icons/pi'
 import { getWidgetAsset, invokeWidgetRpc } from '@/commands'
-import { activeWidgetsStore, extractErrorMessage, getWidgetKey, htmlSafeJSON } from '@/utils'
+import { activeWidgetsStore, extractErrorMessage, getWidgetKey, htmlSafeJSON, normalizeMediaSessionInfo } from '@/utils'
 import preludeScript from '@/scripts/widget-prelude?raw'
 import commonPreludeCss from '@/scripts/common-prelude.css?raw'
 import type { Options as FormatBytesOptions } from 'pretty-bytes'
@@ -82,6 +82,7 @@ export function Widget() {
       if (type === 'RPC_REQUEST') {
         try {
           const res: RpcResponse = { type: 'RPC_RESPONSE', id, payload: null }
+          let transfer: Transferable[] = []
 
           switch (method) {
             case 'utils.open_external_url':
@@ -102,12 +103,19 @@ export function Widget() {
             case 'utils.format_bytes':
               res.payload = formatBytes(params.value as number, params.options as FormatBytesOptions)
               break
+            case 'media.get_active_media':
+              const media = (await invokeWidgetRpc(widget.meta.id, method, params)) as Nullable<MediaSessionInfo>
+              const normalized = normalizeMediaSessionInfo(media)
+
+              if (normalized) transfer = [normalized.thumbnail.buffer]
+              res.payload = normalized
+              break
             default:
               res.payload = await invokeWidgetRpc(widget.meta.id, method, params)
               break
           }
 
-          containerWindow.postMessage(res, '*')
+          containerWindow.postMessage(res, '*', transfer)
         } catch (err) {
           const payload = extractErrorMessage(err)
           containerWindow.postMessage({ type: 'RPC_ERROR_RESPONSE', id, payload } satisfies RpcResponse, '*')
@@ -115,12 +123,11 @@ export function Widget() {
       }
     }
 
-    const mediaUpdatedListener = listen<MediaSessionInfo>('media-updated', async evt => {
-      const thumbnail = new Uint8Array(evt.payload.thumbnail)
+    const mediaUpdatedListener = listen<Nullable<MediaSessionInfo>>('media-updated', async evt => {
+      const payload = normalizeMediaSessionInfo(evt.payload)
+      const transfer = payload ? [payload.thumbnail.buffer] : []
 
-      containerWindow.postMessage({ type: 'MEDIA_UPDATED', payload: { ...evt.payload, thumbnail } }, '*', [
-        thumbnail.buffer,
-      ])
+      containerWindow.postMessage({ type: 'MEDIA_UPDATED', payload }, '*', transfer)
     })
 
     const audioCapturedListener = listen<number[]>('audio-captured', async evt => {
@@ -168,10 +175,8 @@ export function Widget() {
   }, [widget])
 
   useEffect(() => {
-    ;(async () => {
-      if (widget?.isLocked) await currentWindow.setResizable(false)
-      else await currentWindow.setResizable(showControls)
-    })()
+    if (widget?.isLocked) currentWindow.setResizable(false)
+    else currentWindow.setResizable(showControls)
   }, [widget, showControls])
 
   return (
