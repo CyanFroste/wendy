@@ -7,15 +7,18 @@ import { getCurrentWindow, getAllWindows } from '@tauri-apps/api/window'
 import { TrayIcon } from '@tauri-apps/api/tray'
 import { Menu } from '@tauri-apps/api/menu'
 import { defaultWindowIcon } from '@tauri-apps/api/app'
-import { Window } from '@/components/windows'
+import { Window } from '@/components/window'
 import { Settings } from '@/components/settings'
 import { Widgets } from '@/components/widgets'
 import { WidgetEditor } from '@/components/widget-editor'
 import { Widget } from '@/components/widget'
 import { ActiveWidgets } from '@/components/active-widgets'
 import { Help } from '@/components/help'
+import { init as initBackend } from '@/commands'
 import { activeWidgetsStore, createWidgetWindow } from '@/utils'
 import type { ActiveWidget } from '@/types'
+
+await initBackend()
 
 const currentWindow = getCurrentWindow()
 

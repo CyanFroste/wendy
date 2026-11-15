@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router'
 import { listen } from '@tauri-apps/api/event'
 import { getCurrentWindow } from '@tauri-apps/api/window'
-import { Button, Chip } from '@heroui/react'
+import { Button, Chip, Separator } from '@heroui/react'
 import { buttonVariants } from '@heroui/styles'
 import { PiArrowClockwise, PiCheckCircle, PiGear, PiQuestion, PiX } from 'react-icons/pi'
 import { BiSolidWidget } from 'react-icons/bi'
@@ -53,11 +53,11 @@ export function Window() {
       <div
         data-tauri-drag-region
         className="shrink-0 flex items-center gap-2 w-full bg-surface rounded-lg pointer-events-auto p-2">
-        {/* <Link to="/" className="flex items-center gap-2 px-2">
+        <Link to="/" className="flex items-center gap-2 px-1">
           <img src="/logo.png" className="size-8" />
-          <div className="leading-none tracking-wide font-medium">Wendy Widget Framework</div>
+          {/* <div className="leading-none tracking-wide font-medium">Wendy Widget Framework</div> */}
         </Link>
-        <Separator orientation="vertical" /> */}
+        <Separator orientation="vertical" />
 
         <Link to="/" className={getLinkClasses('/')}>
           <BiSolidWidget className="text-lg text-muted" /> Widgets

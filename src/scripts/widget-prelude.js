@@ -66,6 +66,19 @@ window.widgetApi = (() => {
       openRecycleBin: () => call('system.open_recycle_bin'),
       getRecycleBinCount: () => call('system.get_recycle_bin_count'),
     },
+    store: {
+      getStore: name => {
+        return {
+          entries: () => call('store.entries', { name }),
+          keys: () => call('store.keys', { name }),
+          values: () => call('store.values', { name }),
+          get: key => call('store.get', { name, key }),
+          set: (key, value) => call('store.set', { name, key, value }),
+          remove: key => call('store.remove', { name, key }),
+          clear: () => call('store.clear', { name }),
+        }
+      },
+    },
     utils: {
       openExternalUrl: url => call('utils.open_external_url', { url }),
       getAssetUrl: path => call('utils.get_asset_url', { path }),

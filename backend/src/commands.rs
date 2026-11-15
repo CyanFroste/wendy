@@ -1,4 +1,5 @@
 use crate::audio::AudioState;
+use crate::db::DbState;
 use crate::media::MediaCommand;
 use crate::media::MediaState;
 use crate::network::HttpClient;
@@ -82,6 +83,7 @@ pub async fn widget_rpc(
     media_state: AppState<MediaState, '_>,
     audio_state: AppState<AudioState, '_>,
     system_state: AppState<SystemState, '_>,
+    db_state: AppState<DbState, '_>,
     widget_id: String,
     method: String,
     params: JsonValue,
@@ -215,6 +217,71 @@ pub async fn widget_rpc(
             Ok(JsonValue::Null)
         }
 
+        constants::RPC_STORE_ENTRIES
+        | constants::RPC_STORE_KEYS
+        | constants::RPC_STORE_VALUES
+        | constants::RPC_STORE_GET
+        | constants::RPC_STORE_SET
+        | constants::RPC_STORE_DELETE
+        | constants::RPC_STORE_CLEAR => {
+            let name = params["name"]
+                .as_str()
+                .ok_or_else(|| Error::new("missing parameter 'name'"))?;
+            let store = db_state.get_store(name, &widget.allowed_stores)?;
+
+            let key = params["key"]
+                .as_str()
+                .ok_or_else(|| Error::new("missing parameter 'key'"));
+
+            match method.as_str() {
+                constants::RPC_STORE_ENTRIES => {
+                    let data = store.entries().await?;
+
+                    Ok(serde_json::to_value(&data)?)
+                }
+
+                constants::RPC_STORE_VALUES => {
+                    let data = store.values().await?;
+
+                    Ok(serde_json::to_value(&data)?)
+                }
+
+                constants::RPC_STORE_KEYS => {
+                    let data = store.keys().await?;
+
+                    Ok(serde_json::to_value(&data)?)
+                }
+
+                constants::RPC_STORE_GET => {
+                    let data = store.get(key?).await?;
+
+                    Ok(serde_json::to_value(&data)?)
+                }
+
+                constants::RPC_STORE_SET => {
+                    let value = params["value"].clone();
+
+                    store.set(key?, value).await?;
+
+                    Ok(JsonValue::Null)
+                }
+
+                constants::RPC_STORE_DELETE => {
+                    let data = store.delete(key?).await?;
+
+                    Ok(serde_json::to_value(&data)?)
+                }
+
+                constants::RPC_STORE_CLEAR => {
+                    store.clear().await?;
+
+                    Ok(JsonValue::Null)
+                }
+
+                _ => unreachable!(),
+            }
+        }
+
         _ => Err(Error::new("unknown method")),
     }
 }
@@ -319,6 +386,13 @@ pub fn add_path_to_fs_scope(
     }
 
     app_handle.fs_scope().allow_directory(&path, recursive)?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn init(db_state: AppState<DbState, '_>) -> Result<(), Error> {
+    db_state.init().await?;
 
     Ok(())
 }

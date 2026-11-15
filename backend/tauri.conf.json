@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "wendy",
+  "productName": "Wendy Widget Framework",
   "identifier": "com.cyan.wendy",
   "build": {
     "beforeDevCommand": "pnpm vite:dev",
@@ -11,7 +11,7 @@
   "app": {
     "windows": [
       {
-        "title": "wendy",
+        "title": "Wendy Widget Framework",
         "label": "main",
         "decorations": false,
         "resizable": false,

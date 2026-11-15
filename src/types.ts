@@ -8,6 +8,7 @@ export type Widget = {
   isBackground: boolean
   permissions: string[]
   allowedDomains: string[]
+  allowedStores: string[]
   author: string
   source: string
   tags: string[]

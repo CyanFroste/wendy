@@ -28,3 +28,7 @@ export async function startMediaListener(windowLabel: string) {
 export async function startAudioCapture(windowLabel: string) {
   await invoke('start_audio_capture', { windowLabel })
 }
+
+export async function init() {
+  await invoke('init')
+}

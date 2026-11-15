@@ -3,6 +3,7 @@
 
 mod audio;
 mod commands;
+mod db;
 mod media;
 mod network;
 mod system;
@@ -11,8 +12,11 @@ mod utils;
 
 use anyhow::Result;
 use audio::AudioState;
+use db::Db;
+use db::DbState;
 use media::MediaState;
 use network::HttpClient;
+use std::fs;
 use system::SystemState;
 use tauri::{Manager, WindowEvent};
 use types::CacheState;
@@ -37,6 +41,17 @@ async fn main() -> Result<()> {
         .manage(system_state)
         .manage(media_state)
         .manage(audio_state)
+        .setup(|app| {
+            let data_path = app.path().app_data_dir()?;
+            fs::create_dir_all(&data_path)?;
+
+            let db = Db::new(data_path.join("wendy.db"));
+            let db_state = DbState::new(db);
+
+            app.manage(db_state);
+
+            Ok(())
+        })
         .on_window_event(|window, event| {
             if let WindowEvent::Destroyed = event {
                 window
@@ -55,6 +70,7 @@ async fn main() -> Result<()> {
             commands::get_widget_asset,
             commands::start_media_listener,
             commands::start_audio_capture,
+            commands::init,
         ])
         .run(tauri::generate_context!())?;
 

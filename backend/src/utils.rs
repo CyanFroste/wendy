@@ -17,6 +17,13 @@ pub mod constants {
     pub const RPC_AUDIO_TOGGLE_MASTER_MUTE: &str = "audio.toggle_master_mute";
     pub const RPC_SYSTEM_OPEN_RECYCLE_BIN: &str = "system.open_recycle_bin";
     pub const RPC_SYSTEM_GET_RECYCLE_BIN_COUNT: &str = "system.get_recycle_bin_count";
+    pub const RPC_STORE_ENTRIES: &str = "store.entries";
+    pub const RPC_STORE_KEYS: &str = "store.keys";
+    pub const RPC_STORE_VALUES: &str = "store.values";
+    pub const RPC_STORE_GET: &str = "store.get";
+    pub const RPC_STORE_SET: &str = "store.set";
+    pub const RPC_STORE_DELETE: &str = "store.delete";
+    pub const RPC_STORE_CLEAR: &str = "store.clear";
 }
 
 pub fn get_rpc_required_scopes(method: &str) -> Option<&'static [&'static str]> {
@@ -36,6 +43,13 @@ pub fn get_rpc_required_scopes(method: &str) -> Option<&'static [&'static str]> 
         RPC_AUDIO_TOGGLE_MASTER_MUTE => Some(&["audio:write"]),
         RPC_SYSTEM_OPEN_RECYCLE_BIN => Some(&["system:exec"]),
         RPC_SYSTEM_GET_RECYCLE_BIN_COUNT => Some(&["system:read"]),
+        RPC_STORE_ENTRIES => Some(&["store:read"]),
+        RPC_STORE_KEYS => Some(&["store:read"]),
+        RPC_STORE_VALUES => Some(&["store:read"]),
+        RPC_STORE_GET => Some(&["store:read"]),
+        RPC_STORE_SET => Some(&["store:write"]),
+        RPC_STORE_DELETE => Some(&["store:write"]),
+        RPC_STORE_CLEAR => Some(&["store:write"]),
         _ => None,
     }
 }

@@ -28,6 +28,8 @@ pub struct Widget {
     pub tags: Vec<String>,
     #[serde(default)]
     pub allowed_domains: Vec<String>,
+    #[serde(default)]
+    pub allowed_stores: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]

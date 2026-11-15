@@ -4,6 +4,7 @@
 - [x] show more details on widget page
 - [x] list running widgets with actions to close/delete, and manage state
 - [x] edit widget data
+- [x] store api
 - [ ] manage file scopes in ui
 - [ ] booru api
 - [ ] news api
