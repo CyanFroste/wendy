@@ -1,25 +1,38 @@
+use crate::types::ExternalStore;
 use anyhow::Result;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use parking_lot::Mutex;
-use serde::Serialize;
-use std::path::PathBuf;
+use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::{env, fs};
 use sysinfo::{CpuRefreshKind, Disks, MemoryRefreshKind, RefreshKind, System};
+use tauri::fs::Scope;
 use walkdir::WalkDir;
+
+const FS_SCOPE_LIST_KEY: &str = "scopes";
 
 pub struct SystemState {
     pub system: Mutex<System>,
     pub installed_apps: Vec<InstalledApp>,
+    pub asset_scope: Scope,
+    pub fs_scope: Scope,
+    pub fs_scope_store: Arc<ExternalStore>,
 }
 
 impl SystemState {
-    pub fn new() -> Result<Self> {
+    pub fn new(
+        fs_scope: Scope,
+        asset_scope: Scope,
+        fs_scope_store: Arc<ExternalStore>,
+    ) -> Result<Self> {
         let mut system = System::new_with_specifics(
             RefreshKind::nothing()
                 .with_cpu(CpuRefreshKind::everything())
                 .with_memory(MemoryRefreshKind::everything()),
         )?;
+
         let installed_apps = get_installed_apps();
 
         system.refresh_cpu_all();
@@ -28,6 +41,9 @@ impl SystemState {
         Ok(Self {
             system: Mutex::new(system),
             installed_apps,
+            asset_scope,
+            fs_scope,
+            fs_scope_store,
         })
     }
 
@@ -78,6 +94,95 @@ impl SystemState {
 
     pub async fn get_recycle_bin_count(&self) -> Result<usize> {
         Ok(tokio::task::spawn_blocking(get_recycle_bin_count).await?)
+    }
+
+    pub fn restore_fs_scope(&self) -> Result<()> {
+        let mut list = self.get_fs_scope_list();
+        let before = list.len();
+
+        list.retain(|entry| {
+            if entry.path.is_dir() {
+                self.fs_scope
+                    .allow_directory(&entry.path, entry.recursive)
+                    .is_ok()
+            } else {
+                false
+            }
+        });
+
+        if list.len() != before {
+            self.save_fs_scope_list(&list)?;
+        }
+
+        Ok(())
+    }
+
+    pub fn get_fs_scope_list(&self) -> Vec<ScopedDir> {
+        self.fs_scope_store
+            .get(FS_SCOPE_LIST_KEY)
+            .and_then(|x| serde_json::from_value(x).ok())
+            .unwrap_or_default()
+    }
+
+    pub fn add_dir_to_fs_scope(&self, path: impl AsRef<Path>, recursive: bool) -> Result<()> {
+        if !path.as_ref().is_dir() {
+            return Err(anyhow::anyhow!(
+                "directory does not exist: {}",
+                path.as_ref().display()
+            ));
+        }
+
+        let clean_path = normalize_display_path(path);
+        let key = path_as_key(&clean_path);
+
+        self.fs_scope.allow_directory(&clean_path, recursive)?;
+
+        let mut list = self.get_fs_scope_list();
+
+        if let Some(existing) = list
+            .iter_mut()
+            .find(|x| path_as_key(normalize_display_path(&x.path)) == key)
+        {
+            existing.path = clean_path;
+            existing.recursive = recursive;
+        } else {
+            list.push(ScopedDir {
+                path: clean_path,
+                recursive,
+            });
+        }
+
+        self.save_fs_scope_list(&list)
+    }
+
+    pub fn remove_dir_from_fs_scope(&self, path: impl AsRef<Path>, recursive: bool) -> Result<()> {
+        let clean_path = normalize_display_path(path);
+        let target_key = path_as_key(&clean_path);
+
+        // Best-effort revoke for the current session (may fail if folder was already deleted)
+        let _ = self.fs_scope.forbid_directory(&clean_path, recursive);
+
+        let mut list = self.get_fs_scope_list();
+
+        list.retain(|entry| {
+            let entry_key = path_as_key(normalize_display_path(&entry.path));
+
+            if recursive {
+                !entry_key.starts_with(&target_key)
+            } else {
+                entry_key != target_key
+            }
+        });
+
+        self.save_fs_scope_list(&list)
+    }
+
+    fn save_fs_scope_list(&self, list: &[ScopedDir]) -> Result<()> {
+        self.fs_scope_store
+            .set(FS_SCOPE_LIST_KEY, serde_json::json!(list));
+        self.fs_scope_store.save()?;
+
+        Ok(())
     }
 }
 
@@ -164,6 +269,39 @@ fn get_app_icon(path: impl AsRef<str>) -> Option<String> {
     systemicons::get_icon(&path, 32)
         .ok()
         .map(|bytes| format!("data:image/png;base64,{}", BASE64.encode(bytes)))
+}
+
+fn normalize_display_path(path: impl AsRef<Path>) -> PathBuf {
+    let resolved = fs::canonicalize(&path).unwrap_or_else(|_| path.as_ref().to_path_buf());
+    let lossy = resolved.to_string_lossy();
+
+    let without_prefix = if let Some(unc) = lossy.strip_prefix(r"\\?\UNC\") {
+        format!(r"\\{unc}")
+    } else {
+        lossy.strip_prefix(r"\\?\").unwrap_or(&lossy).to_owned()
+    };
+
+    let trimmed = without_prefix.trim_end_matches(['\\', '/']);
+
+    if trimmed.is_empty() && !without_prefix.is_empty() {
+        PathBuf::from("/")
+    } else if trimmed.ends_with(':') {
+        // Keep trailing slash so "C:\" doesn't become drive-relative "C:"
+        PathBuf::from(format!(r"{trimmed}\"))
+    } else {
+        PathBuf::from(trimmed)
+    }
+}
+
+fn path_as_key(path: impl AsRef<Path>) -> PathBuf {
+    // lowercased path for component-safe, case-insensitive matching on Windows.
+    PathBuf::from(path.as_ref().to_string_lossy().to_ascii_lowercase())
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScopedDir {
+    pub path: PathBuf,
+    pub recursive: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]

@@ -1,9 +1,5 @@
 import { invoke } from '@tauri-apps/api/core'
-import type { Nullable, Widget } from '@/types'
-
-export async function addPathToFsScope(path: string, recursive = true) {
-  await invoke('add_path_to_fs_scope', { path, recursive })
-}
+import type { Nullable, ScopedDir, Widget } from '@/types'
 
 export async function getWidgets(widgetsPath: string, refetch = false) {
   return await invoke<Widget[]>('get_widgets', { widgetsPath, refetch })
@@ -27,6 +23,18 @@ export async function startMediaListener(windowLabel: string) {
 
 export async function startAudioCapture(windowLabel: string) {
   await invoke('start_audio_capture', { windowLabel })
+}
+
+export async function getFsScopeList() {
+  return await invoke<ScopedDir[]>('get_fs_scope_list')
+}
+
+export async function addDirToFsScope(path: string, recursive = true) {
+  await invoke('add_dir_to_fs_scope', { path, recursive })
+}
+
+export async function removeDirFromFsScope(path: string, recursive = true) {
+  await invoke('remove_dir_from_fs_scope', { path, recursive })
 }
 
 export async function init() {

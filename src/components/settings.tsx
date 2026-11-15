@@ -4,23 +4,28 @@ import { open as openFilePicker } from '@tauri-apps/plugin-dialog'
 import { revealItemInDir } from '@tauri-apps/plugin-opener'
 import { PiCheck, PiFolder, PiMagnifyingGlass } from 'react-icons/pi'
 import { useStore } from 'zustand'
-import { addPathToFsScope } from '@/commands'
+import { addDirToFsScope, getFsScopeList } from '@/commands'
 import { globalStore } from '@/utils'
+import type { ScopedDir } from '@/types'
 
 export function Settings() {
   const store = useStore(globalStore)
   const [widgetsPath, setWidgetsPath] = useState('')
+  const [fsScopes, setFsScopes] = useState<ScopedDir[]>([])
 
   const isChanged = true // TODO - also save only changed values
 
+  console.log(fsScopes)
+
   const onSave = async () => {
     // TODO? clear other scopes first?
-    await addPathToFsScope(widgetsPath)
+    await addDirToFsScope(widgetsPath)
     globalStore.setState({ widgetsPath })
   }
 
   useEffect(() => {
     setWidgetsPath(store.widgetsPath)
+    getFsScopeList().then(setFsScopes)
   }, [])
 
   return (

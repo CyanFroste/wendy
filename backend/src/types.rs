@@ -2,6 +2,10 @@ use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
+use tauri::Wry;
+use tauri_plugin_store::Store;
+
+pub type ExternalStore = Store<Wry>;
 
 #[derive(Default)]
 pub struct CacheState {

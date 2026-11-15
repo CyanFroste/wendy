@@ -4,6 +4,7 @@ use crate::media::MediaCommand;
 use crate::media::MediaState;
 use crate::network::HttpClient;
 use crate::network::HttpOptions;
+use crate::system::ScopedDir;
 use crate::system::SystemState;
 use crate::types::{CacheState, Error, Widget};
 use crate::utils;
@@ -14,7 +15,6 @@ use std::fs;
 use std::path::{Component, Path, PathBuf};
 use tauri::ipc::Response;
 use tauri::{AppHandle, Emitter, Manager, State as AppState};
-use tauri_plugin_fs::FsExt;
 use url::Url;
 
 #[tauri::command]
@@ -115,6 +115,7 @@ pub async fn widget_rpc(
                 .request(&url, options, &widget.allowed_domains)
                 .await?;
 
+                // TODO: json! vs to_value
             Ok(serde_json::to_value(&data)?)
         }
 
@@ -376,16 +377,28 @@ pub fn get_widget(
 }
 
 #[tauri::command]
-pub fn add_path_to_fs_scope(
-    app_handle: AppHandle,
+pub fn get_fs_scope_list(system_state: AppState<SystemState, '_>) -> Vec<ScopedDir> {
+    system_state.get_fs_scope_list()
+}
+
+#[tauri::command]
+pub fn add_dir_to_fs_scope(
+    system_state: AppState<SystemState, '_>,
     path: PathBuf,
     recursive: bool,
 ) -> Result<(), Error> {
-    if !path.exists() {
-        return Err(Error::new("path does not exist"));
-    }
+    system_state.add_dir_to_fs_scope(&path, recursive)?;
 
-    app_handle.fs_scope().allow_directory(&path, recursive)?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn remove_dir_from_fs_scope(
+    system_state: AppState<SystemState, '_>,
+    path: PathBuf,
+    recursive: bool,
+) -> Result<(), Error> {
+    system_state.remove_dir_from_fs_scope(&path, recursive)?;
 
     Ok(())
 }

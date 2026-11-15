@@ -75,6 +75,8 @@ export type RpcResponse = {
   payload: unknown
 }
 
+export type ScopedDir = { path: string; recursive: boolean }
+
 export type Nullable<T> = T | null | undefined
 export type Dictionary<T = unknown> = Record<string, T>
 
