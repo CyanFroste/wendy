@@ -5,16 +5,16 @@
 - [x] list running widgets with actions to close/delete, and manage state
 - [x] edit widget data
 - [x] store api
-- [ ] local/remote image gallery widget
+- [x] readonly fs api
+- [x] application icon
+- [x] manage file scopes in ui
 - [ ] provide types for widget authors
 - [ ] reusable helper component library for widget authors
 - [ ] template generator to scaffold boilerplate widget projects quickly
 - [ ] document all RPC functions and types
 - [ ] show documentation directly in the app as well
-- [x] application icon
-- [ ] embeddable external/local webpage widget
-- [ ] ? manage file scopes in ui
 - [ ] ? system font/file picker api (or just localize widget assets)
 - [ ] ? expose template generator and build/dev utilities via app cli
 - [ ] ? manage state and window creation on rust side
 - [ ] ? test widget with monitor scale factor
+- [ ] ? embeddable external/local webpage widget

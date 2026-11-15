@@ -10,7 +10,14 @@ import { cn } from '@heroui/styles'
 import formatBytes from 'pretty-bytes'
 import { PiLockKey, PiLockKeyOpen, PiNotePencil, PiPushPin, PiPushPinSlash, PiTrash } from 'react-icons/pi'
 import { invokeWidgetRpc, readFile } from '@/commands'
-import { activeWidgetsStore, extractErrorMessage, getWidgetKey, htmlSafeJSON, normalizeMediaSessionInfo } from '@/utils'
+import {
+  constants,
+  activeWidgetsStore,
+  extractErrorMessage,
+  getWidgetKey,
+  htmlSafeJSON,
+  normalizeMediaSessionInfo,
+} from '@/utils'
 import preludeScript from '@/scripts/widget-prelude?raw'
 import commonPreludeCss from '@/scripts/common-prelude.css?raw'
 import type { Options as FormatBytesOptions } from 'pretty-bytes'
@@ -85,7 +92,7 @@ export function Widget() {
           let transfer: Transferable[] = []
 
           switch (method) {
-            case 'utils.open_external_url':
+            case constants.RPC_UTILS_OPEN_EXTERNAL_URL:
               const url = new URL(params.url as string)
 
               if (url.protocol !== 'https:') {
@@ -95,18 +102,18 @@ export function Widget() {
               await openUrl(url.toString())
               break
 
-            case 'system.read_file':
-            case 'utils.get_asset_url':
-            case 'utils.get_asset': {
+            case constants.RPC_SYSTEM_READ_FILE:
+            case constants.RPC_UTILS_GET_ASSET_URL:
+            case constants.RPC_UTILS_GET_ASSET: {
               const assetPath = `${widget.meta.path}/assets/${params.path}`
 
-              if (method === 'utils.get_asset_url') {
+              if (method === constants.RPC_UTILS_GET_ASSET_URL) {
                 res.payload = convertFileSrc(assetPath)
                 break
               }
 
               const data = new Uint8Array(
-                method === 'system.read_file'
+                method === constants.RPC_SYSTEM_READ_FILE
                   ? await invokeWidgetRpc<number[]>(widget.meta.id, method, params)
                   : await readFile(assetPath),
               )
@@ -116,12 +123,12 @@ export function Widget() {
               break
             }
 
-            case 'utils.format_bytes':
+            case constants.RPC_UTILS_FORMAT_BYTES:
               res.payload = formatBytes(params.value as number, params.options as FormatBytesOptions)
               break
 
-            case 'media.get_active_media': {
-              const media = (await invokeWidgetRpc(widget.meta.id, method, params)) as Nullable<MediaSessionInfo>
+            case constants.RPC_MEDIA_GET_ACTIVE_MEDIA: {
+              const media = await invokeWidgetRpc<Nullable<MediaSessionInfo>>(widget.meta.id, method, params)
               const normalized = normalizeMediaSessionInfo(media)
 
               if (normalized) transfer = [normalized.thumbnail.buffer]

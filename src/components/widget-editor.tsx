@@ -8,6 +8,7 @@ import { Button, Chip, Code, Link, Modal, Separator } from '@heroui/react'
 import { PiArrowClockwise, PiImageFill, PiPlus } from 'react-icons/pi'
 import { invokeWidgetRpc, getWidget, readFile } from '@/commands'
 import {
+  constants,
   activeWidgetsStore,
   createWidgetWindow,
   extractErrorMessage,
@@ -120,18 +121,18 @@ export function WidgetEditor() {
           let transfer: Transferable[] = []
 
           switch (method) {
-            case 'system.read_file':
-            case 'utils.get_asset_url':
-            case 'utils.get_asset': {
+            case constants.RPC_SYSTEM_READ_FILE:
+            case constants.RPC_UTILS_GET_ASSET_URL:
+            case constants.RPC_UTILS_GET_ASSET: {
               const assetPath = `${widget.path}/assets/${params.path}`
 
-              if (method === 'utils.get_asset_url') {
+              if (method === constants.RPC_UTILS_GET_ASSET_URL) {
                 res.payload = convertFileSrc(assetPath)
                 break
               }
 
               const data = new Uint8Array(
-                method === 'system.read_file'
+                method === constants.RPC_SYSTEM_READ_FILE
                   ? await invokeWidgetRpc<number[]>(widget.id, method, params)
                   : await readFile(assetPath),
               )

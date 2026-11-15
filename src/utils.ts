@@ -6,6 +6,15 @@ import { persist } from 'zustand/middleware'
 import { startAudioCapture, startMediaListener } from '@/commands'
 import type { ActiveWidget, MediaSessionInfo, Nullable } from '@/types'
 
+export const constants = {
+  RPC_SYSTEM_READ_FILE: 'system.read_file',
+  RPC_UTILS_GET_ASSET_URL: 'utils.get_asset_url',
+  RPC_UTILS_GET_ASSET: 'utils.get_asset',
+  RPC_UTILS_OPEN_EXTERNAL_URL: 'utils.open_external_url',
+  RPC_UTILS_FORMAT_BYTES: 'utils.format_bytes',
+  RPC_MEDIA_GET_ACTIVE_MEDIA: 'media.get_active_media',
+}
+
 export const activeWidgetsStore = await loadStore('active-widgets-store.json', { autoSave: false })
 
 export function getWidgetKey(id: string, instanceId: string) {
