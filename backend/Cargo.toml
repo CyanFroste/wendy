@@ -2,6 +2,8 @@
 name = "wendy"
 version = "1.0.0"
 edition = "2024"
+license = "GPL-3.0-or-later"
+authors = ["Cyan Froste"]
 
 [build-dependencies]
 tauri-build = { version = "2.7.4", features = [] }

@@ -2,6 +2,8 @@
   "name": "wendy",
   "private": true,
   "type": "module",
+  "author": "Cyan Froste",
+  "license": "GPL-3.0-or-later",
   "scripts": {
     "dev": "tauri dev",
     "build": "tauri build",

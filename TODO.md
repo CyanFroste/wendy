@@ -10,7 +10,10 @@
 - [x] manage file scopes in ui
 - [x] provide types for widget authors
 - [x] template generator to scaffold boilerplate widget projects quickly
-- [ ] document all RPC functions and types and show documentation directly in the app as well
+- [x] document all RPC functions and types
+- [ ] add CI/CD
+- [ ] fix scrollbar
+- [ ] fix missing README sections
 - [ ] reusable helper component library for widget authors
 - [ ] ? system font/file picker api (or just localize widget assets)
 - [ ] ? manage state and window creation on rust side
