@@ -15,7 +15,7 @@ const FS_SCOPE_LIST_KEY: &str = "scopes";
 
 pub struct SystemState {
     pub system: Mutex<System>,
-    pub installed_apps: Vec<InstalledApp>,
+    pub installed_apps: Arc<Vec<InstalledApp>>,
     // TODO: can move this to a ScopeManager, may not use ExternalStore
     pub asset_scope: Scope,
     pub fs_scope: Scope,
@@ -34,14 +34,12 @@ impl SystemState {
                 .with_memory(MemoryRefreshKind::everything()),
         )?;
 
-        let installed_apps = get_installed_apps();
-
         system.refresh_cpu_all();
         system.refresh_memory();
 
         Ok(Self {
             system: Mutex::new(system),
-            installed_apps,
+            installed_apps: Arc::new(get_installed_apps()),
             asset_scope,
             fs_scope,
             fs_scope_store,

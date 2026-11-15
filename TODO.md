@@ -8,13 +8,11 @@
 - [x] readonly fs api
 - [x] application icon
 - [x] manage file scopes in ui
-- [ ] provide types for widget authors
+- [x] provide types for widget authors
+- [x] template generator to scaffold boilerplate widget projects quickly
+- [ ] document all RPC functions and types and show documentation directly in the app as well
 - [ ] reusable helper component library for widget authors
-- [ ] template generator to scaffold boilerplate widget projects quickly
-- [ ] document all RPC functions and types
-- [ ] show documentation directly in the app as well
 - [ ] ? system font/file picker api (or just localize widget assets)
-- [ ] ? expose template generator and build/dev utilities via app cli
 - [ ] ? manage state and window creation on rust side
 - [ ] ? test widget with monitor scale factor
 - [ ] ? embeddable external/local webpage widget

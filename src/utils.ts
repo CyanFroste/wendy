@@ -14,6 +14,16 @@ export const constants = {
   RPC_UTILS_OPEN_EXTERNAL_URL: 'utils.open_external_url',
   RPC_UTILS_FORMAT_BYTES: 'utils.format_bytes',
   RPC_MEDIA_GET_ACTIVE_MEDIA: 'media.get_active_media',
+
+  PERM_NETWORK_EXEC: 'network:exec',
+  PERM_SYSTEM_READ: 'system:read',
+  PERM_SYSTEM_EXEC: 'system:exec',
+  PERM_MEDIA_READ: 'media:read',
+  PERM_MEDIA_EXEC: 'media:exec',
+  PERM_AUDIO_READ: 'audio:read',
+  PERM_AUDIO_EXEC: 'audio:exec',
+  PERM_STORE_READ: 'store:read',
+  PERM_STORE_WRITE: 'store:write',
 }
 
 export const activeWidgetsStore = await loadStore('active-widgets-store.json', { autoSave: false })

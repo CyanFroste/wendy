@@ -12,8 +12,8 @@ import type { Widget } from '@/types'
 
 const searchIndex = new MiniSearch({
   idField: 'id',
-  fields: ['name', 'description', 'permissions'],
   storeFields: ['id'],
+  fields: ['name', 'description', 'author', 'tags', 'permissions'],
   searchOptions: { boost: { name: 2 }, prefix: true, fuzzy: true },
 })
 

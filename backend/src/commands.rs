@@ -1,17 +1,15 @@
 use crate::audio::AudioState;
 use crate::db::DbState;
-use crate::media::MediaCommand;
-use crate::media::MediaState;
-use crate::network::HttpClient;
-use crate::network::HttpOptions;
-use crate::system::ScopedDir;
-use crate::system::SystemState;
+use crate::media::{MediaCommand, MediaState};
+use crate::network::{HttpClient, HttpOptions};
+use crate::system::{InstalledApp, ScopedDir, SystemState};
 use crate::types::{CacheState, Error, Widget};
 use crate::utils;
 use crate::utils::constants;
 use serde_json::Value as JsonValue;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
+use std::sync::Arc;
 use tauri::ipc::Response;
 use tauri::{AppHandle, Emitter, Manager, State as AppState};
 use url::Url;
@@ -391,6 +389,38 @@ pub fn remove_dir_from_fs_scope(
     system_state.remove_dir_from_fs_scope(&path, recursive)?;
 
     Ok(())
+}
+
+#[tauri::command]
+pub fn get_installed_apps(
+    system_state: AppState<SystemState, '_>,
+) -> Result<Arc<Vec<InstalledApp>>, Error> {
+    Ok(Arc::clone(&system_state.installed_apps))
+}
+
+#[tauri::command]
+pub fn open_installed_app(
+    system_state: AppState<SystemState, '_>,
+    path: PathBuf,
+) -> Result<(), Error> {
+    if !system_state.installed_apps.iter().any(|x| x.path == path) {
+        return Err(Error::new("invalid application path"));
+    }
+
+    // ! NOTE: need to make sure this doesn't make the launched app bound to the current process
+    open::that_detached(path)?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn create_new_project(
+    widgets_path: PathBuf,
+    mut widget: Widget,
+) -> Result<Widget, Error> {
+    widget.path = utils::create_new_project(&widgets_path, &widget).await?;
+
+    Ok(widget)
 }
 
 #[tauri::command]

@@ -1,7 +1,8 @@
 use crate::types::Widget;
 use anyhow::Result;
 use std::fs::File;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use tokio::fs;
 
 pub mod constants {
     pub const RPC_NETWORK_REQUEST: &str = "network.request";
@@ -41,8 +42,8 @@ pub fn get_rpc_required_scopes(method: &str) -> Option<&'static [&'static str]> 
         RPC_MEDIA_GET_ACTIVE_MEDIA => Some(&["media:read"]),
         RPC_MEDIA_SEND_COMMAND => Some(&["media:exec"]),
         RPC_AUDIO_GET_MASTER_VOLUME => Some(&["audio:read"]),
-        RPC_AUDIO_SET_MASTER_VOLUME => Some(&["audio:write"]),
-        RPC_AUDIO_TOGGLE_MASTER_MUTE => Some(&["audio:write"]),
+        RPC_AUDIO_SET_MASTER_VOLUME => Some(&["audio:exe"]),
+        RPC_AUDIO_TOGGLE_MASTER_MUTE => Some(&["audio:exec"]),
         RPC_SYSTEM_OPEN_RECYCLE_BIN => Some(&["system:exec"]),
         RPC_SYSTEM_GET_RECYCLE_BIN_COUNT => Some(&["system:read"]),
         RPC_SYSTEM_READ_DIR => Some(&["system:read"]),
@@ -75,4 +76,51 @@ pub fn get_widgets(widgets_path: PathBuf) -> Result<Vec<Widget>> {
     }
 
     Ok(widgets)
+}
+
+pub async fn create_new_project(
+    widgets_path: impl AsRef<Path>,
+    widget: &Widget,
+) -> Result<PathBuf> {
+    let widget_path = widgets_path.as_ref().join(&widget.id);
+    let content_path = widget_path.join("content");
+    let editor_path = widget_path.join("editor");
+    let types_path = widget_path.join("types");
+
+    fs::create_dir_all(&widget_path).await?;
+    fs::create_dir(&content_path).await?;
+    fs::create_dir(&editor_path).await?;
+    fs::create_dir(&types_path).await?;
+
+    let content_jsconfig = include_str!("../templates/content.jsconfig.json");
+    let content_css = include_str!("../templates/content.css");
+    let editor_jsconfig = include_str!("../templates/editor.jsconfig.json");
+    let editor_js = include_str!("../templates/editor.js");
+    let common_d_ts = include_str!("../templates/common.d.ts");
+    let content_d_ts = include_str!("../templates/content.d.ts");
+    let editor_d_ts = include_str!("../templates/editor.d.ts");
+
+    fs::write(&content_path.join("jsconfig.json"), content_jsconfig).await?;
+    fs::write(&content_path.join("styles.css"), content_css).await?;
+    fs::File::create(&content_path.join("index.html")).await?;
+    fs::File::create(&content_path.join("script.js")).await?;
+
+    fs::write(&editor_path.join("jsconfig.json"), editor_jsconfig).await?;
+    fs::write(&editor_path.join("script.js"), editor_js).await?;
+    fs::File::create(&editor_path.join("index.html")).await?;
+    fs::File::create(&editor_path.join("styles.css")).await?;
+
+    fs::write(&types_path.join("common.d.ts"), common_d_ts).await?;
+    fs::write(&types_path.join("content.d.ts"), content_d_ts).await?;
+    fs::write(&types_path.join("editor.d.ts"), editor_d_ts).await?;
+
+    let manifest = serde_json::to_string_pretty(widget)?;
+    let base_jsconfig = include_str!("../templates/base.jsconfig.json");
+    let readme = include_str!("../templates/README.md");
+
+    fs::write(&widget_path.join("base.jsconfig.json"), base_jsconfig).await?;
+    fs::write(&widget_path.join("manifest.json"), manifest).await?;
+    fs::write(&widget_path.join("README.md"), readme).await?;
+
+    Ok(widget_path)
 }

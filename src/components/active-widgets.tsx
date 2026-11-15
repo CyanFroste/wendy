@@ -38,6 +38,12 @@ export function ActiveWidgets() {
 
   return (
     <div className="h-full flex flex-col px-2 overflow-auto divide-y divide-surface">
+      {!activeWidgets.length && (
+        <div className="flex size-full justify-center items-center text-muted text-sm tracking-wide">
+          NO ACTIVE WIDGETS
+        </div>
+      )}
+
       {activeWidgets.map(it => {
         return (
           <div key={it.instanceId} className="flex gap-2 py-2">

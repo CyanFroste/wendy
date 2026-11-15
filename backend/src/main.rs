@@ -79,6 +79,9 @@ async fn main() -> Result<()> {
             commands::add_dir_to_fs_scope,
             commands::remove_dir_from_fs_scope,
             commands::read_file,
+            commands::get_installed_apps,
+            commands::open_installed_app,
+            commands::create_new_project,
             commands::init,
         ])
         .run(tauri::generate_context!())?;

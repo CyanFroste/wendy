@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core'
-import type { Nullable, ScopedDir, Widget } from '@/types'
+import type { InstalledApp, Nullable, ScopedDir, Widget } from '@/types'
 
 export async function getWidgets(widgetsPath: string, refetch = false) {
   return await invoke<Widget[]>('get_widgets', { widgetsPath, refetch })
@@ -35,6 +35,18 @@ export async function addDirToFsScope(path: string, recursive = true) {
 
 export async function removeDirFromFsScope(path: string, recursive = true) {
   await invoke('remove_dir_from_fs_scope', { path, recursive })
+}
+
+export async function getInstalledApps() {
+  return await invoke<InstalledApp[]>('get_installed_apps')
+}
+
+export async function openInstalledApp(path: string) {
+  return await invoke('open_installed_app', { path })
+}
+
+export async function createNewProject(widgetsPath: string, widget: Widget) {
+  return await invoke<Widget>('create_new_project', { widgetsPath, widget })
 }
 
 export async function init() {

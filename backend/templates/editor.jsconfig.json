@@ -1,0 +1,4 @@
+{
+  "extends": "../base.jsconfig.json",
+  "include": ["./**/*", "../types/common.d.ts", "../types/editor.d.ts"]
+}

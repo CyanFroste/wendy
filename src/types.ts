@@ -66,6 +66,12 @@ export type ScopedDir = { path: string; recursive: boolean }
 
 export type FileEntry = { path: string; isDir: boolean }
 
+export type InstalledApp = {
+  name: string
+  path: string
+  iconBase64?: Nullable<string>
+}
+
 export type RpcRequest = {
   type: 'RPC_REQUEST'
   id: string

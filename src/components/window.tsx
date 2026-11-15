@@ -4,7 +4,7 @@ import { listen } from '@tauri-apps/api/event'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { Button, Chip, Separator } from '@heroui/react'
 import { buttonVariants } from '@heroui/styles'
-import { PiArrowClockwise, PiCheckCircle, PiGear, PiQuestion, PiX } from 'react-icons/pi'
+import { PiArrowClockwise, PiCheckCircle, PiCode, PiGear, PiQuestion, PiX } from 'react-icons/pi'
 import { BiSolidWidget } from 'react-icons/bi'
 import { useStore } from 'zustand'
 import { activeWidgetsStore, globalStore } from '@/utils'
@@ -75,6 +75,10 @@ export function Window() {
 
         <RouterLink to="/settings" className={getLinkClasses('/settings')}>
           <PiGear className="text-lg text-muted" /> Settings
+        </RouterLink>
+
+        <RouterLink to="/develop" className={getLinkClasses('/develop')}>
+          <PiCode className="text-lg text-muted" /> Develop
         </RouterLink>
 
         <RouterLink to="/help" className={getLinkClasses('/help')}>
