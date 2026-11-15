@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { kebabCase } from 'lodash'
 import { useStore } from 'zustand'
-import { Button, Checkbox, CheckboxGroup, Code, Input, Label, Separator, Switch, TextArea } from '@heroui/react'
+import { Button, Checkbox, CheckboxGroup, Code, Input, Label, Separator, Switch, TextArea, toast } from '@heroui/react'
 import { PiImageFill, PiPlus } from 'react-icons/pi'
 import { createNewProject } from '@/commands'
 import { constants, globalStore } from '@/utils'
@@ -63,13 +63,19 @@ export function Develop() {
         tags: [],
       }
 
-      await createNewProject(store.widgetsPath, widget)
-      //   const installedApps = await getInstalledApps()
-      //   const codeEditor = installedApps.find(it => it.name === 'Visual Studio Code')
+      const promise = createNewProject(store.widgetsPath, widget).then(data => {
+        setAuthor('')
+        setName('')
+        setId('')
 
-      setId('')
-      setName('')
-      setAuthor('')
+        return data
+      })
+
+      toast.promise(promise, {
+        error: err => err.message,
+        loading: 'Creating new project...',
+        success: ({ path }) => `Project created at ${path}`,
+      })
     } catch (err) {
       console.error(err)
     } finally {
