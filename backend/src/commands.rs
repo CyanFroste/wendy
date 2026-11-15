@@ -11,8 +11,7 @@ use crate::utils;
 use crate::utils::constants;
 use serde_json::Value as JsonValue;
 use std::collections::BTreeMap;
-use std::fs;
-use std::path::{Component, Path, PathBuf};
+use std::path::PathBuf;
 use tauri::ipc::Response;
 use tauri::{AppHandle, Emitter, Manager, State as AppState};
 use url::Url;
@@ -115,7 +114,6 @@ pub async fn widget_rpc(
                 .request(&url, options, &widget.allowed_domains)
                 .await?;
 
-                // TODO: json! vs to_value
             Ok(serde_json::to_value(&data)?)
         }
 
@@ -166,6 +164,24 @@ pub async fn widget_rpc(
             media_state.send_command(player_id, command).await?;
 
             Ok(JsonValue::Null)
+        }
+
+        constants::RPC_SYSTEM_READ_DIR => {
+            let path = params["path"]
+                .as_str()
+                .ok_or_else(|| Error::new("missing parameter 'path'"))?;
+            let data = system_state.read_dir(path)?;
+
+            Ok(serde_json::to_value(&data)?)
+        }
+
+        constants::RPC_SYSTEM_READ_FILE => {
+            let path = params["path"]
+                .as_str()
+                .ok_or_else(|| Error::new("missing parameter 'path'"))?;
+            let data = system_state.read_file(path)?;
+
+            Ok(serde_json::to_value(&data)?)
         }
 
         constants::RPC_SYSTEM_GET_CPU_INFO => {
@@ -288,42 +304,6 @@ pub async fn widget_rpc(
 }
 
 #[tauri::command]
-pub async fn get_widget_asset(
-    cache_state: AppState<CacheState, '_>,
-    widget_id: String,
-    path: String,
-) -> Result<Response, Error> {
-    // only getting for widgets from cache for now
-    let Some(widget_path) = cache_state
-        .widgets_cache
-        .read()
-        .get(&widget_id)
-        .map(|x| x.path.clone())
-    else {
-        return Err(Error::new("widget not found"));
-    };
-
-    let path: PathBuf = Path::new(&path)
-        .components()
-        .filter_map(|x| match x {
-            Component::Normal(s) => Some(s),
-            _ => None,
-        })
-        .collect();
-
-    let asset_path = widget_path.join("assets").join(path);
-
-    if !asset_path.exists() || !asset_path.is_file() {
-        return Err(Error::new("asset not found"));
-    }
-
-    let bytes = fs::read(&asset_path)?;
-    let res = Response::new(bytes);
-
-    Ok(res)
-}
-
-#[tauri::command]
 pub fn get_widgets(
     cache_state: AppState<CacheState, '_>,
     widgets_path: PathBuf,
@@ -374,6 +354,16 @@ pub fn get_widget(
     *cache_state.widgets_cache.write() = map;
 
     Ok(widget)
+}
+
+#[tauri::command]
+pub async fn read_file(
+    system_state: AppState<SystemState, '_>,
+    path: String,
+) -> Result<Response, Error> {
+    let bytes = system_state.read_file(&path)?;
+
+    Ok(Response::new(bytes))
 }
 
 #[tauri::command]

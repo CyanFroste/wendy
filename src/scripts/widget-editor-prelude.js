@@ -25,6 +25,8 @@ window.widgetEditorApi = (() => {
 
   return {
     system: {
+      readDir: path => call('system.read_dir', { path }),
+      readFile: path => call('system.read_file', { path }),
       getInstalledApps: () => call('system.get_installed_apps'),
     },
     utils: {

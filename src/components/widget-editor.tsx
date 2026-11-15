@@ -1,11 +1,12 @@
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router'
 import { readTextFile } from '@tauri-apps/plugin-fs'
 import { convertFileSrc } from '@tauri-apps/api/core'
+import { openUrl } from '@tauri-apps/plugin-opener'
 import { getAllWindows, currentMonitor as getCurrentMonitor } from '@tauri-apps/api/window'
-import { Button, Chip, Code, Modal, Separator } from '@heroui/react'
+import { Button, Chip, Code, Link, Modal, Separator } from '@heroui/react'
 import { PiArrowClockwise, PiImageFill, PiPlus } from 'react-icons/pi'
-import { getWidget, getWidgetAsset, invokeWidgetRpc } from '@/commands'
+import { invokeWidgetRpc, getWidget, readFile } from '@/commands'
 import {
   activeWidgetsStore,
   createWidgetWindow,
@@ -116,20 +117,36 @@ export function WidgetEditor() {
       if (type === 'RPC_REQUEST') {
         try {
           const res: RpcResponse = { type: 'RPC_RESPONSE', id, payload: null }
+          let transfer: Transferable[] = []
 
           switch (method) {
+            case 'system.read_file':
             case 'utils.get_asset_url':
-              res.payload = convertFileSrc(`${widget.path}/assets/${params.path}`)
+            case 'utils.get_asset': {
+              const assetPath = `${widget.path}/assets/${params.path}`
+
+              if (method === 'utils.get_asset_url') {
+                res.payload = convertFileSrc(assetPath)
+                break
+              }
+
+              const data = new Uint8Array(
+                method === 'system.read_file'
+                  ? await invokeWidgetRpc<number[]>(widget.id, method, params)
+                  : await readFile(assetPath),
+              )
+
+              res.payload = data
+              transfer = [data.buffer]
               break
-            case 'utils.get_asset':
-              res.payload = await getWidgetAsset(widget.id, params.path as string)
-              break
+            }
+
             default:
               res.payload = await invokeWidgetRpc(widget.id, method, params)
               break
           }
 
-          containerWindow.postMessage(res, '*')
+          containerWindow.postMessage(res, '*', transfer)
         } catch (err) {
           const payload = extractErrorMessage(err)
           containerWindow.postMessage({ type: 'RPC_ERROR_RESPONSE', id, payload } satisfies RpcResponse, '*')
@@ -182,8 +199,8 @@ export function WidgetEditor() {
                 </Button>
                 <Modal.Backdrop>
                   <Modal.Container>
-                    <Modal.Dialog className="p-4 rounded-lg max-w-200">
-                      <div className="flex flex-col gap-4">
+                    <Modal.Dialog className="p-0 rounded-lg max-w-200">
+                      <div className="flex flex-col gap-4 p-4 overflow-auto">
                         <img
                           src={convertFileSrc(widget.previewPath)}
                           className="h-100 w-full shrink-0 object-contain data-[placeholder=true]:object-cover border border-separator rounded-lg"
@@ -197,7 +214,22 @@ export function WidgetEditor() {
 
                         <Separator />
                         <div className="flex flex-col gap-2 text-sm">
-                          {/* <div>Author: {widget.author}</div> */}
+                          <div>Author: {widget.author}</div>
+
+                          {widget.source && (
+                            <div>
+                              Source:{' '}
+                              <Link
+                                onClick={evt => {
+                                  evt.preventDefault()
+                                  openUrl(widget.source)
+                                }}>
+                                {widget.source}
+                                <Link.Icon />
+                              </Link>
+                            </div>
+                          )}
+
                           <div>
                             ID: <Code>{widget.id}</Code>
                           </div>
@@ -206,20 +238,36 @@ export function WidgetEditor() {
                           </div>
                         </div>
 
-                        <Separator />
-                        <div className="flex flex-col gap-2">
-                          <div className="text-muted text-xs tracking-wide">PERMISSIONS</div>
+                        {(
+                          [
+                            ['PERMISSIONS', widget.permissions],
+                            ['TAGS', widget.tags],
+                            ['ALLOWED DOMAINS', widget.allowedDomains],
+                            ['ALLOWED STORES', widget.allowedStores],
+                          ] as const
+                        ).map(([category, values]) => {
+                          if (!values.length) return null
+                          return (
+                            <Fragment key={category}>
+                              <Separator />
+                              <div className="flex flex-col gap-2">
+                                <div className="text-muted text-xs tracking-wide">{category}</div>
 
-                          <div className="flex flex-wrap gap-2">
-                            {widget.permissions.map(it => (
-                              <Chip key={it}>{it}</Chip>
-                            ))}
-                          </div>
-                        </div>
+                                <div className="flex flex-wrap gap-2">
+                                  {values.map(it => (
+                                    <Chip key={it} className="font-mono">
+                                      {it}
+                                    </Chip>
+                                  ))}
+                                </div>
+                              </div>
+                            </Fragment>
+                          )
+                        })}
                       </div>
 
-                      <Separator className="my-4" />
-                      <Modal.Footer>
+                      <Separator />
+                      <Modal.Footer className="p-4">
                         <Button slot="close" variant="outline">
                           Close
                         </Button>

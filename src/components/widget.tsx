@@ -9,7 +9,7 @@ import { Button, ToggleButton } from '@heroui/react'
 import { cn } from '@heroui/styles'
 import formatBytes from 'pretty-bytes'
 import { PiLockKey, PiLockKeyOpen, PiNotePencil, PiPushPin, PiPushPinSlash, PiTrash } from 'react-icons/pi'
-import { getWidgetAsset, invokeWidgetRpc } from '@/commands'
+import { invokeWidgetRpc, readFile } from '@/commands'
 import { activeWidgetsStore, extractErrorMessage, getWidgetKey, htmlSafeJSON, normalizeMediaSessionInfo } from '@/utils'
 import preludeScript from '@/scripts/widget-prelude?raw'
 import commonPreludeCss from '@/scripts/common-prelude.css?raw'
@@ -94,22 +94,41 @@ export function Widget() {
 
               await openUrl(url.toString())
               break
+
+            case 'system.read_file':
             case 'utils.get_asset_url':
-              res.payload = convertFileSrc(`${widget.meta.path}/assets/${params.path}`)
+            case 'utils.get_asset': {
+              const assetPath = `${widget.meta.path}/assets/${params.path}`
+
+              if (method === 'utils.get_asset_url') {
+                res.payload = convertFileSrc(assetPath)
+                break
+              }
+
+              const data = new Uint8Array(
+                method === 'system.read_file'
+                  ? await invokeWidgetRpc<number[]>(widget.meta.id, method, params)
+                  : await readFile(assetPath),
+              )
+
+              res.payload = data
+              transfer = [data.buffer]
               break
-            case 'utils.get_asset':
-              res.payload = await getWidgetAsset(widget.meta.id, params.path as string)
-              break
+            }
+
             case 'utils.format_bytes':
               res.payload = formatBytes(params.value as number, params.options as FormatBytesOptions)
               break
-            case 'media.get_active_media':
+
+            case 'media.get_active_media': {
               const media = (await invokeWidgetRpc(widget.meta.id, method, params)) as Nullable<MediaSessionInfo>
               const normalized = normalizeMediaSessionInfo(media)
 
               if (normalized) transfer = [normalized.thumbnail.buffer]
               res.payload = normalized
               break
+            }
+
             default:
               res.payload = await invokeWidgetRpc(widget.meta.id, method, params)
               break

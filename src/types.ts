@@ -62,6 +62,10 @@ export type MediaCommand =
   | { type: 'prev' }
   | { type: 'seek'; positionMs: number }
 
+export type ScopedDir = { path: string; recursive: boolean }
+
+export type FileEntry = { path: string; isDir: boolean }
+
 export type RpcRequest = {
   type: 'RPC_REQUEST'
   id: string
@@ -74,8 +78,6 @@ export type RpcResponse = {
   id: string
   payload: unknown
 }
-
-export type ScopedDir = { path: string; recursive: boolean }
 
 export type Nullable<T> = T | null | undefined
 export type Dictionary<T = unknown> = Record<string, T>

@@ -37,6 +37,13 @@ pub struct Widget {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileEntry {
+    pub path: PathBuf,
+    pub is_dir: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct Error {
     message: String,
 }

@@ -9,12 +9,12 @@ export async function getWidget(widgetsPath: string, id: string) {
   return await invoke<Nullable<Widget>>('get_widget', { widgetsPath, id })
 }
 
-export async function invokeWidgetRpc(widgetId: string, method: string, params: unknown) {
-  return await invoke<unknown>('widget_rpc', { widgetId, method, params })
+export async function invokeWidgetRpc<T = unknown>(widgetId: string, method: string, params: unknown) {
+  return await invoke<T>('widget_rpc', { widgetId, method, params })
 }
 
-export async function getWidgetAsset(widgetId: string, path: string) {
-  return await invoke<ArrayBuffer>('get_widget_asset', { widgetId, path })
+export async function readFile(path: string) {
+  return await invoke<ArrayBuffer>('read_file', { path })
 }
 
 export async function startMediaListener(windowLabel: string) {

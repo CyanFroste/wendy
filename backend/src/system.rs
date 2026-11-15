@@ -1,10 +1,10 @@
-use crate::types::ExternalStore;
+use crate::types::{ExternalStore, FileEntry};
 use anyhow::Result;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
+use std::path::{Component as PathComponent, Path, PathBuf};
 use std::sync::Arc;
 use std::{env, fs};
 use sysinfo::{CpuRefreshKind, Disks, MemoryRefreshKind, RefreshKind, System};
@@ -16,6 +16,7 @@ const FS_SCOPE_LIST_KEY: &str = "scopes";
 pub struct SystemState {
     pub system: Mutex<System>,
     pub installed_apps: Vec<InstalledApp>,
+    // TODO: can move this to a ScopeManager, may not use ExternalStore
     pub asset_scope: Scope,
     pub fs_scope: Scope,
     pub fs_scope_store: Arc<ExternalStore>,
@@ -105,6 +106,10 @@ impl SystemState {
                 self.fs_scope
                     .allow_directory(&entry.path, entry.recursive)
                     .is_ok()
+                    && self
+                        .asset_scope
+                        .allow_directory(&entry.path, entry.recursive)
+                        .is_ok()
             } else {
                 false
             }
@@ -115,6 +120,33 @@ impl SystemState {
         }
 
         Ok(())
+    }
+
+    pub fn validate_fs_scoped_path(&self, path: impl AsRef<Path>) -> Result<PathBuf> {
+        let raw = path.as_ref();
+
+        // reject relative paths and `..` traversal without stripping drive/root components
+        if !raw.is_absolute()
+            || raw
+                .components()
+                .any(|c| matches!(c, PathComponent::ParentDir))
+            || !self.fs_scope.is_allowed(raw)
+        {
+            return Err(anyhow::anyhow!("access denied"));
+        }
+
+        // resolve symlinks/junctions and verify the real target is still in scope
+        let canonical_path = fs::canonicalize(raw)?;
+
+        if !self.fs_scope.is_allowed(&canonical_path) {
+            return Err(anyhow::anyhow!("access denied"));
+        }
+
+        if !canonical_path.exists() {
+            return Err(anyhow::anyhow!("file not found"));
+        }
+
+        Ok(canonical_path)
     }
 
     pub fn get_fs_scope_list(&self) -> Vec<ScopedDir> {
@@ -136,6 +168,7 @@ impl SystemState {
         let key = path_as_key(&clean_path);
 
         self.fs_scope.allow_directory(&clean_path, recursive)?;
+        self.asset_scope.allow_directory(&clean_path, recursive)?;
 
         let mut list = self.get_fs_scope_list();
 
@@ -161,6 +194,7 @@ impl SystemState {
 
         // Best-effort revoke for the current session (may fail if folder was already deleted)
         let _ = self.fs_scope.forbid_directory(&clean_path, recursive);
+        let _ = self.asset_scope.forbid_directory(&clean_path, recursive);
 
         let mut list = self.get_fs_scope_list();
 
@@ -179,10 +213,41 @@ impl SystemState {
 
     fn save_fs_scope_list(&self, list: &[ScopedDir]) -> Result<()> {
         self.fs_scope_store
-            .set(FS_SCOPE_LIST_KEY, serde_json::json!(list));
+            .set(FS_SCOPE_LIST_KEY, serde_json::to_value(list)?);
         self.fs_scope_store.save()?;
 
         Ok(())
+    }
+
+    pub fn read_dir(&self, path: impl AsRef<Path>) -> Result<Vec<FileEntry>> {
+        let path = self.validate_fs_scoped_path(&path)?;
+
+        if !path.is_dir() {
+            return Err(anyhow::anyhow!("directory not found"));
+        }
+
+        let entries = path
+            .read_dir()?
+            .flatten()
+            .filter_map(|x| {
+                x.file_type().ok().map(|y| FileEntry {
+                    is_dir: y.is_dir(),
+                    path: x.path(),
+                })
+            })
+            .collect();
+
+        Ok(entries)
+    }
+
+    pub fn read_file(&self, path: impl AsRef<Path>) -> Result<Vec<u8>> {
+        let path = self.validate_fs_scoped_path(&path)?;
+
+        if !path.is_file() {
+            return Err(anyhow::anyhow!("file not found"));
+        }
+
+        Ok(fs::read(&path)?)
     }
 }
 

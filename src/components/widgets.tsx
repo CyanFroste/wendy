@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router'
+import { Link as RouterLink } from 'react-router'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import { useStore } from 'zustand'
 import MiniSearch from 'minisearch'
@@ -85,7 +85,7 @@ export function Widgets() {
       <div className="grid grid-cols-4 gap-8 h-fit py-4">
         {filtered.map(it => {
           return (
-            <Link key={it.id} to={`/editor/${it.id}`} className="flex flex-col gap-2 items-center">
+            <RouterLink key={it.id} to={`/editor/${it.id}`} className="flex flex-col gap-2 items-center">
               <img
                 src={convertFileSrc(it.previewPath)}
                 className="h-60 shrink-0 object-contain data-[placeholder=true]:object-cover border border-separator rounded-lg"
@@ -99,7 +99,7 @@ export function Widgets() {
                 {it.isBackground && <PiImageFill className="text-success" />} {it.name}
               </div>
               <div className="text-xs text-muted">{it.description}</div>
-            </Link>
+            </RouterLink>
           )
         })}
       </div>

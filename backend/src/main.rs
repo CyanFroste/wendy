@@ -73,12 +73,12 @@ async fn main() -> Result<()> {
             commands::widget_rpc,
             commands::get_widgets,
             commands::get_widget,
-            commands::get_widget_asset,
             commands::start_media_listener,
             commands::start_audio_capture,
             commands::get_fs_scope_list,
             commands::add_dir_to_fs_scope,
             commands::remove_dir_from_fs_scope,
+            commands::read_file,
             commands::init,
         ])
         .run(tauri::generate_context!())?;

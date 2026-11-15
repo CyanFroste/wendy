@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, Outlet, useLocation, useNavigate } from 'react-router'
+import { Link as RouterLink, Outlet, useLocation, useNavigate } from 'react-router'
 import { listen } from '@tauri-apps/api/event'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { Button, Chip, Separator } from '@heroui/react'
@@ -53,17 +53,17 @@ export function Window() {
       <div
         data-tauri-drag-region
         className="shrink-0 flex items-center gap-2 w-full bg-surface rounded-lg pointer-events-auto p-2">
-        <Link to="/" className="flex items-center gap-2 px-1">
-          <img src="/logo.png" className="size-8" />
+        <RouterLink to="/" className="flex items-center gap-2 px-1">
+          <img src="/logo.png" className="size-6" />
           {/* <div className="leading-none tracking-wide font-medium">Wendy Widget Framework</div> */}
-        </Link>
+        </RouterLink>
         <Separator orientation="vertical" />
 
-        <Link to="/" className={getLinkClasses('/')}>
+        <RouterLink to="/" className={getLinkClasses('/')}>
           <BiSolidWidget className="text-lg text-muted" /> Widgets
-        </Link>
+        </RouterLink>
 
-        <Link to="/active" className={getLinkClasses('/active')}>
+        <RouterLink to="/active" className={getLinkClasses('/active')}>
           <PiCheckCircle className="text-lg text-muted" />
           Active
           {activeWidgetsCount > 0 && (
@@ -71,15 +71,15 @@ export function Window() {
               <Chip.Label>{activeWidgetsCount}</Chip.Label>
             </Chip>
           )}
-        </Link>
+        </RouterLink>
 
-        <Link to="/settings" className={getLinkClasses('/settings')}>
+        <RouterLink to="/settings" className={getLinkClasses('/settings')}>
           <PiGear className="text-lg text-muted" /> Settings
-        </Link>
+        </RouterLink>
 
-        <Link to="/help" className={getLinkClasses('/help')}>
+        <RouterLink to="/help" className={getLinkClasses('/help')}>
           <PiQuestion className="text-lg text-muted" /> Help
-        </Link>
+        </RouterLink>
 
         <div className="flex gap-2 items-center ml-auto">
           <Button isIconOnly size="sm" variant="tertiary" onPress={refetch}>

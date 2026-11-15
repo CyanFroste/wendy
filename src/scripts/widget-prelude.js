@@ -58,6 +58,8 @@ window.widgetApi = (() => {
       },
     },
     system: {
+      readDir: path => call('system.read_dir', { path }),
+      readFile: path => call('system.read_file', { path }),
       getCpuInfo: () => call('system.get_cpu_info'),
       getRamInfo: () => call('system.get_ram_info'),
       getDiskInfo: () => call('system.get_disk_info'),
@@ -80,9 +82,9 @@ window.widgetApi = (() => {
       },
     },
     utils: {
-      openExternalUrl: url => call('utils.open_external_url', { url }),
       getAssetUrl: path => call('utils.get_asset_url', { path }),
       getAsset: path => call('utils.get_asset', { path }),
+      openExternalUrl: url => call('utils.open_external_url', { url }),
       formatBytes: (value, options) => call('utils.format_bytes', { value, options }),
     },
   }
