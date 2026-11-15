@@ -60,6 +60,7 @@ window.widgetApi = (() => {
     system: {
       readDir: path => call('system.read_dir', { path }),
       readFile: path => call('system.read_file', { path }),
+      getFileUrl: path => call('system.get_file_url', { path }),
       getCpuInfo: () => call('system.get_cpu_info'),
       getRamInfo: () => call('system.get_ram_info'),
       getDiskInfo: () => call('system.get_disk_info'),

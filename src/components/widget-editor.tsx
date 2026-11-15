@@ -121,6 +121,11 @@ export function WidgetEditor() {
           let transfer: Transferable[] = []
 
           switch (method) {
+            case constants.RPC_SYSTEM_GET_FILE_URL:
+              if (!widget.permissions.includes('system:read')) throw new Error('permission denied')
+              res.payload = convertFileSrc(params.path as string)
+              break
+
             case constants.RPC_SYSTEM_READ_FILE:
             case constants.RPC_UTILS_GET_ASSET_URL:
             case constants.RPC_UTILS_GET_ASSET: {

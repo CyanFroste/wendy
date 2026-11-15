@@ -102,6 +102,11 @@ export function Widget() {
               await openUrl(url.toString())
               break
 
+            case constants.RPC_SYSTEM_GET_FILE_URL:
+              if (!widget.meta.permissions.includes('system:read')) throw new Error('permission denied')
+              res.payload = convertFileSrc(params.path as string)
+              break
+
             case constants.RPC_SYSTEM_READ_FILE:
             case constants.RPC_UTILS_GET_ASSET_URL:
             case constants.RPC_UTILS_GET_ASSET: {
