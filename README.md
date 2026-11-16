@@ -256,7 +256,7 @@ Declare required permissions in `manifest.json` under `"permissions"`:
 
 ---
 
-#### `store.getStore<T unknown>(name: string) => Store<T>`
+#### `store.getStore<T>(name: string) => Store<T>`
 
 - Opens a persistent key-value store bound to `name`. The store name must be listed in `allowedStores` in `manifest.json` (allowing either isolated widget storage or shared cross-widget stores).
 
