@@ -131,7 +131,8 @@ export function WidgetEditor() {
     toast.promise(fn, {
       error: err => err.message,
       loading: instanceId ? 'Updating widget...' : 'Creating widget...',
-      success: key => `Widget ${instanceId ? 'updated' : 'created'} (${key})`,
+      success: `Widget ${instanceId ? 'updated' : 'created'}`,
+      // success: key => `Widget ${instanceId ? 'updated' : 'created'} (${key})`,
     })
   }
 

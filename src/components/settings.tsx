@@ -145,7 +145,7 @@ export function Settings() {
           )}
 
           {store.widgetsPath && (
-            <Button variant="outline" onPress={onInstallDefaultWidgets}>
+            <Button variant="outline" onPress={onInstallDefaultWidgets} isPending={isLoading}>
               <RiInstallLine className="text-lg text-muted" /> Install default widgets
             </Button>
           )}
