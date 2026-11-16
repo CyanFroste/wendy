@@ -14,23 +14,24 @@ A widget framework for **Windows** and **HTML Programmers**.
 
 </div>
 
----
-
 ## Download
 
-Download and install using the latest installer from [GitHub Releases](https://github.com/CyanFroste/wendy/releases/latest).
+- **Recommended:** Download and install using the latest installer from [GitHub Releases](https://github.com/CyanFroste/wendy/releases/latest)
+- **Basic Widgets:** Download and install the starter widget pack directly from inside the app, which fetches the latest release from [CyanFroste/widgets](https://github.com/CyanFroste/widgets) into your configured **Widgets Folder** (skipping any widget folders that already exist).
 
 ### [Screenshots](./screenshots/index.md)
 
----
+![](./screenshots/1.png)
+
+![](./screenshots/2.png)
 
 ## About
 
 A desktop widget runtime and manager that runs self-contained web widgets (HTML, CSS, and JavaScript) directly on the desktop.
 
-- **Widget Gallery & Instance Management:** Browse installed widgets in the **Widgets** view and launch multiple independent instances of any widget.
+- **Widget Gallery & Instance Management:** Browse installed widgets in the **Widgets** view, download basic widgets in-app from [CyanFroste/widgets](https://github.com/CyanFroste/widgets), and launch multiple independent instances of any widget.
 
-- **Interactive Desktop Overlays:** Active widgets render on the desktop where they can be dragged, resized via corner/edge handles, locked in place, reconfigured via their editor, or removed, with live instance counts tracked in the **Active** tab.
+- **Interactive Desktop Overlays:** Active widgets render on the desktop where they can be dragged, resized via corner/edge handles, locked in place, reconfigured via their editor, or removed, with live instance counts tracked in the **Active** tab. **Press** `Ctrl + t` on any widget window _(except the background widgets)_ to show its **Transform Controls**.
 
 - **Permission & Path Sandboxing:**
   - Each widget declares required capabilities (`permissions`), allowed HTTP hosts (`allowedDomains`), and storage namespaces (`allowedStores`) in `manifest.json`.
@@ -38,8 +39,6 @@ A desktop widget runtime and manager that runs self-contained web widgets (HTML,
   - Filesystem access is restricted to the widget's own `assets/` bundle and user-approved directories explicitly configured under **Allowed Folders** in **Settings**.
 
 - **Zero-Build Widget Authoring:** Widgets load directly from subfolders inside the configured **Widgets Folder** (e.g., `F:\widgets`) without a bundler or compile step, using `base.jsconfig.json`, per-folder `jsconfig.json` files, and ambient `.d.ts` declarations (`common.d.ts`, `content.d.ts`, `editor.d.ts`) for editor IntelliSense.
-
----
 
 ## Widget Lifecycle & Flow
 
@@ -101,8 +100,6 @@ The editor provides a sandboxed settings UI used both when creating a new instan
 
 3. **Execution & Live Updates:** `content/script.js` renders the widget UI, communicates with OS services and storage through `window.widgetApi` (enforced against `manifest.json` permissions), and updates whenever new instance data is saved from the editor.
 
----
-
 ## Permissions Reference
 
 Declare required permissions in `manifest.json` under `"permissions"`:
@@ -118,8 +115,6 @@ Declare required permissions in `manifest.json` under `"permissions"`:
 | `audio:exec`   | Changing system master volume and toggling mute                                             |
 | `store:read`   | Reading entries, keys, and values from namespaces listed in `allowedStores`                 |
 | `store:write`  | Writing, removing, and clearing entries in namespaces listed in `allowedStores`             |
-
----
 
 ## API Reference
 
@@ -540,8 +535,6 @@ interface FormatBytesOptions {
 }
 ```
 
----
-
 ## [License](./LICENSE)
 
 **Wendy Widget Framework** is licensed under the **GNU General Public License v3.0 (GPLv3)**. See the [LICENSE](./LICENSE) file for the full terms. Any modified versions or forks of the host runtime must also be distributed under GPLv3.
@@ -551,8 +544,6 @@ interface FormatBytesOptions {
 Widgets run in isolated web views and interact with the host solely through the public `window.widgetApi` and `window.widgetEditorApi` interfaces. Creating, distributing, or selling a widget for Wendy Widget Framework does not make that widget a derivative work of the host application under GPLv3.
 
 The TypeScript declaration files (`types/*.d.ts`) and starter widget templates in this repository are additionally dual-licensed under the **MIT License** (or **CC0 1.0 Universal**), allowing widget developers to copy, modify, and bundle them freely inside any widget regardless of its license.
-
----
 
 ### Attributions
 

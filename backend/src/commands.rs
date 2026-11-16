@@ -442,3 +442,12 @@ pub async fn init(
 
     Ok(())
 }
+
+#[tauri::command]
+pub async fn download_and_install_latest_default_widgets(
+    widgets_path: PathBuf,
+) -> Result<(), Error> {
+    utils::download_and_install_latest_default_widgets(&widgets_path).await?;
+
+    Ok(())
+}

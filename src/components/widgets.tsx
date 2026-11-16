@@ -53,6 +53,7 @@ export function Widgets() {
   useEffect(() => {
     ;(async () => {
       try {
+        if (!store.widgetsPath) return
         setWidgets(await getWidgets(store.widgetsPath))
       } catch (err) {
         console.error(err)
@@ -89,13 +90,16 @@ export function Widgets() {
       </div>
 
       {!filtered.length && (
-        <div className="flex size-full justify-center items-center text-muted text-sm tracking-wide">NO WIDGETS</div>
+        <div className="flex flex-col gap-1 size-full justify-center items-center text-muted text-sm tracking-wide">
+          <span>NO WIDGETS FOUND</span>
+          <span>{!store.widgetsPath && '(Please select widgets folder in settings)'}</span>
+        </div>
       )}
 
       <div className="grid grid-cols-4 gap-8 h-fit py-4">
         {filtered.map(it => {
           return (
-            <RouterLink key={it.id} to={`/editor/${it.id}`} className="flex flex-col gap-2 items-center">
+            <RouterLink key={it.id} to={`/editor/${it.id}`} className="flex flex-col gap-2 items-center text-center">
               <img
                 src={convertFileSrc(it.previewPath)}
                 className="h-60 shrink-0 object-contain data-[placeholder=true]:object-cover border border-separator rounded-lg"

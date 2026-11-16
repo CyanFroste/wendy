@@ -3,8 +3,14 @@ import { Button, Input, Label, Separator, toast } from '@heroui/react'
 import { open as openFilePicker } from '@tauri-apps/plugin-dialog'
 import { revealItemInDir } from '@tauri-apps/plugin-opener'
 import { PiCheck, PiFolder, PiMagnifyingGlass, PiPlus, PiX } from 'react-icons/pi'
+import { RiInstallLine } from 'react-icons/ri'
 import { useStore } from 'zustand'
-import { addDirToFsScope, getFsScopeList, removeDirFromFsScope } from '@/commands'
+import {
+  addDirToFsScope,
+  downloadAndInstallLatestDefaultWidgets,
+  getFsScopeList,
+  removeDirFromFsScope,
+} from '@/commands'
 import { globalStore } from '@/utils'
 import type { ScopedDir } from '@/types'
 
@@ -37,7 +43,7 @@ export function Settings() {
     toast.promise(fn, {
       error: err => err.message,
       loading: 'Saving settings...',
-      success: 'Settings saved',
+      success: 'Settings saved (you may need to restart the app for some changes to take effect)',
     })
   }
 
@@ -60,6 +66,31 @@ export function Settings() {
     } catch (err) {
       console.error(err)
     }
+  }
+
+  const onInstallDefaultWidgets = () => {
+    if (!store.widgetsPath) return
+
+    // downloads from https://github.com/CyanFroste/widgets/releases/latest/download/widgets.zip
+    const fn = async () => {
+      try {
+        setIsLoading(true)
+
+        await downloadAndInstallLatestDefaultWidgets(store.widgetsPath)
+        globalStore.setState(prev => ({ refetchCounter: prev.refetchCounter + 1 }))
+      } catch (err) {
+        console.error(err)
+        throw err
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    toast.promise(fn, {
+      error: err => err.message,
+      loading: 'Installing default widgets...',
+      success: 'Default widgets installed',
+    })
   }
 
   useEffect(() => {
@@ -110,6 +141,12 @@ export function Settings() {
           {widgetsPath && (
             <Button variant="outline" isDisabled={!widgetsPath} onPress={() => revealItemInDir(widgetsPath)}>
               <PiMagnifyingGlass className="text-lg text-muted" /> Show in Explorer
+            </Button>
+          )}
+
+          {store.widgetsPath && (
+            <Button variant="outline" onPress={onInstallDefaultWidgets}>
+              <RiInstallLine className="text-lg text-muted" /> Install default widgets
             </Button>
           )}
         </div>

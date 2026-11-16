@@ -24,7 +24,7 @@ pub struct Widget {
     pub is_background: bool,
     #[serde(default)]
     pub permissions: Vec<String>,
-    #[serde(skip_deserializing)]
+    #[serde(skip_deserializing, skip_serializing_if = "std::path::Path::is_empty")]
     pub path: PathBuf,
     pub author: String,
     pub source: Option<String>,

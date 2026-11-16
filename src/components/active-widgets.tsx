@@ -60,7 +60,7 @@ export function ActiveWidgets() {
           <div key={it.instanceId} className="flex gap-2 py-2">
             <img
               src={convertFileSrc(it.meta.previewPath)}
-              className="size-40 shrink-0 object-contain data-[placeholder=true]:object-cover border border-separator rounded-lg"
+              className="size-36 shrink-0 object-contain data-[placeholder=true]:object-cover border border-separator rounded-lg"
               onError={evt => {
                 evt.currentTarget.src = '/placeholder.png'
                 evt.currentTarget.setAttribute('data-placeholder', 'true')

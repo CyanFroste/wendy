@@ -1,8 +1,12 @@
 use crate::types::Widget;
 use anyhow::Result;
+use std::collections::HashSet;
 use std::fs::File;
-use std::path::{Path, PathBuf};
+use std::io;
+use std::io::Cursor;
+use std::path::{Component as PathComponent, Path, PathBuf};
 use tokio::fs;
+use zip::ZipArchive;
 
 pub mod constants {
     pub const RPC_NETWORK_REQUEST: &str = "network.request";
@@ -85,11 +89,13 @@ pub async fn create_new_project(
     let widget_path = widgets_path.as_ref().join(&widget.id);
     let content_path = widget_path.join("content");
     let editor_path = widget_path.join("editor");
+    let assets_path = widget_path.join("assets");
     let types_path = widget_path.join("types");
 
     fs::create_dir_all(&widget_path).await?;
     fs::create_dir(&content_path).await?;
     fs::create_dir(&editor_path).await?;
+    fs::create_dir(&assets_path).await?;
     fs::create_dir(&types_path).await?;
 
     let content_jsconfig = include_str!("../templates/content.jsconfig.json");
@@ -123,4 +129,61 @@ pub async fn create_new_project(
     fs::write(&widget_path.join("README.md"), readme).await?;
 
     Ok(widget_path)
+}
+
+pub async fn download_and_install_latest_default_widgets(
+    widgets_path: impl AsRef<Path>,
+) -> Result<()> {
+    let target_dir = widgets_path.as_ref().to_path_buf();
+
+    let bytes =
+        reqwest::get("https://github.com/CyanFroste/widgets/releases/latest/download/widgets.zip")
+            .await?
+            .error_for_status()?
+            .bytes()
+            .await?;
+
+    tokio::task::spawn_blocking(move || -> Result<()> {
+        // snapshot existing top-level folders before extracting anything
+        let existing: HashSet<_> = std::fs::read_dir(&target_dir)?
+            .filter_map(|entry| entry.ok().map(|e| e.file_name()))
+            .collect();
+
+        let mut archive = ZipArchive::new(Cursor::new(bytes))?;
+
+        for i in 0..archive.len() {
+            let mut entry = archive.by_index(i)?;
+
+            let Some(enclosed_path) = entry.enclosed_name() else {
+                continue;
+            };
+
+            let Some(PathComponent::Normal(top_dir)) = enclosed_path.components().next() else {
+                continue;
+            };
+
+            if existing.contains(top_dir) {
+                continue;
+            }
+
+            let out_path = target_dir.join(&enclosed_path);
+
+            if !entry.is_dir() {
+                if let Some(parent) = out_path.parent() {
+                    std::fs::create_dir_all(parent)?;
+                }
+
+                let mut out_file = File::create(&out_path)?;
+
+                io::copy(&mut entry, &mut out_file)?;
+            } else {
+                std::fs::create_dir_all(&out_path)?;
+            }
+        }
+
+        Ok(())
+    })
+    .await??;
+
+    Ok(())
 }

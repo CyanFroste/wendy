@@ -88,6 +88,7 @@ async fn main() -> Result<()> {
             commands::open_installed_app,
             commands::create_new_project,
             commands::init,
+            commands::download_and_install_latest_default_widgets,
         ])
         .run(tauri::generate_context!())?;
 

@@ -11,9 +11,9 @@
 - [x] provide types for widget authors
 - [x] template generator to scaffold boilerplate widget projects quickly
 - [x] document all RPC functions and types
-- [ ] add CI/CD
-- [ ] fix scrollbar
-- [ ] fix missing README sections
+- [x] add CI/CD
+- [x] fix missing README sections
+- [x] fix scrollbar
 - [ ] reusable helper component library for widget authors
 - [ ] ? system font/file picker api (or just localize widget assets)
 - [ ] ? manage state and window creation on rust side

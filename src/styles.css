@@ -23,23 +23,21 @@ svg[data-slot='spinner-icon'] {
   height: 100%;
 }
 
-/* 
 ::selection {
-  @apply bg-default-700 text-background;
+  @apply bg-accent;
 }
 
 ::-webkit-scrollbar {
-  @apply size-2.5;
+  @apply size-2.5 rounded-full;
 }
 
 ::-webkit-scrollbar-thumb {
-  @apply bg-default-200/50;
+  @apply bg-surface-tertiary rounded-full;
 }
 
 ::-webkit-scrollbar-track {
-  @apply bg-default-100/25;
-} 
-*/
+  @apply bg-surface rounded-full;
+}
 
 @font-face {
   font-family: 'Inter';

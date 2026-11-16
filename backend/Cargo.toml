@@ -1,6 +1,6 @@
 [package]
 name = "wendy"
-version = "1.1.0"
+version = "1.0.0"
 edition = "2024"
 license = "GPL-3.0-or-later"
 authors = ["Cyan Froste"]
@@ -35,7 +35,8 @@ open = "5.4.5"
 cpal = "0.18.2"
 reqwest = "0.13.5"
 url = "2.5.8"
-tauri-plugin-log = "2"
+tauri-plugin-log = "2.10.2"
+zip = { version = "9.6.0", default-features = false, features = ["deflate"] }
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.62.2", features = [

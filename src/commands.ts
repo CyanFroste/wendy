@@ -52,3 +52,7 @@ export async function createNewProject(widgetsPath: string, widget: Widget) {
 export async function init() {
   await invoke('init')
 }
+
+export async function downloadAndInstallLatestDefaultWidgets(widgetsPath: string) {
+  await invoke('download_and_install_latest_default_widgets', { widgetsPath })
+}
