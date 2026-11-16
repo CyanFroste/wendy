@@ -10,7 +10,7 @@ A widget framework for **Windows** and **HTML Programmers**.
 
 [![Downloads count](https://img.shields.io/github/downloads/CyanFroste/wendy/total.svg)](https://github.com/CyanFroste/wendy/releases)
 [![Latest version](https://img.shields.io/github/v/release/CyanFroste/wendy?label=latest&color=2596be)](https://github.com/CyanFroste/wendy/releases/latest)
-[![License](https://img.shields.io/github/license/CyanFroste/wendy?label=license&color=green)](https://github.com/CyanFroste/wendy/blob/main/LICENSE)
+[![License](https://img.shields.io/badge/license-GPLv3-green)](https://github.com/CyanFroste/wendy/blob/main/LICENSE)
 
 </div>
 
@@ -29,7 +29,7 @@ A widget framework for **Windows** and **HTML Programmers**.
 
 A desktop widget runtime and manager that runs self-contained web widgets (HTML, CSS, and JavaScript) directly on the desktop.
 
-- **Widget Gallery & Instance Management:** Browse installed widgets in the **Widgets** view, download basic widgets in-app from [CyanFroste/widgets](https://github.com/CyanFroste/widgets), and launch multiple independent instances of any widget.
+- **Widget Gallery & Instance Management:** Browse installed widgets in the **Widgets** view, download starter widgets in-app from [CyanFroste/widgets](https://github.com/CyanFroste/widgets), and launch multiple independent instances of any widget.
 
 - **Interactive Desktop Overlays:** Active widgets render on the desktop where they can be dragged, resized via corner/edge handles, locked in place, reconfigured via their editor, or removed, with live instance counts tracked in the **Active** tab. **Press** `Ctrl + t` on any widget window _(except the background widgets)_ to show its **Transform Controls**.
 
