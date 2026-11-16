@@ -9,7 +9,6 @@ use crate::utils::constants;
 use serde_json::Value as JsonValue;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
-use std::sync::Arc;
 use tauri::ipc::Response;
 use tauri::{AppHandle, Emitter, Manager, State as AppState};
 use url::Url;
@@ -201,7 +200,7 @@ pub async fn widget_rpc(
         }
 
         constants::RPC_SYSTEM_GET_INSTALLED_APPS => {
-            Ok(serde_json::to_value(&system_state.installed_apps)?)
+            Ok(serde_json::to_value(&*system_state.installed_apps.read())?)
         }
 
         constants::RPC_SYSTEM_OPEN_INSTALLED_APP => {
@@ -210,7 +209,12 @@ pub async fn widget_rpc(
                 .ok_or_else(|| Error::new("missing parameter 'path'"))?;
             let path = PathBuf::from(path);
 
-            if !system_state.installed_apps.iter().any(|x| x.path == path) {
+            if !system_state
+                .installed_apps
+                .read()
+                .iter()
+                .any(|x| x.path == path)
+            {
                 return Err(Error::new("invalid application path"));
             }
 
@@ -394,8 +398,8 @@ pub fn remove_dir_from_fs_scope(
 #[tauri::command]
 pub fn get_installed_apps(
     system_state: AppState<SystemState, '_>,
-) -> Result<Arc<Vec<InstalledApp>>, Error> {
-    Ok(Arc::clone(&system_state.installed_apps))
+) -> Result<Vec<InstalledApp>, Error> {
+    Ok(system_state.installed_apps.read().clone())
 }
 
 #[tauri::command]
@@ -403,7 +407,12 @@ pub fn open_installed_app(
     system_state: AppState<SystemState, '_>,
     path: PathBuf,
 ) -> Result<(), Error> {
-    if !system_state.installed_apps.iter().any(|x| x.path == path) {
+    if !system_state
+        .installed_apps
+        .read()
+        .iter()
+        .any(|x| x.path == path)
+    {
         return Err(Error::new("invalid application path"));
     }
 
@@ -424,7 +433,11 @@ pub async fn create_new_project(
 }
 
 #[tauri::command]
-pub async fn init(db_state: AppState<DbState, '_>) -> Result<(), Error> {
+pub async fn init(
+    db_state: AppState<DbState, '_>,
+    system_state: AppState<SystemState, '_>,
+) -> Result<(), Error> {
+    system_state.init().await?;
     db_state.init().await?;
 
     Ok(())

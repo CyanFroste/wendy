@@ -9,17 +9,28 @@ import type { ActiveWidget } from '@/types'
 
 export function ActiveWidgets() {
   const navigate = useNavigate()
+
   const [activeWidgets, setActiveWidgets] = useState<ActiveWidget[]>([])
+  const [isLoading, setIsLoading] = useState(false)
 
   const onRemove = async (widget: ActiveWidget) => {
-    const key = getWidgetKey(widget.meta.id, widget.instanceId)
+    try {
+      setIsLoading(true)
 
-    await activeWidgetsStore.delete(key)
-    await activeWidgetsStore.save()
-    setActiveWidgets(prev => prev.filter(it => getWidgetKey(it.meta.id, it.instanceId) !== key))
+      const key = getWidgetKey(widget.meta.id, widget.instanceId)
 
-    for (const window of await getAllWindows()) {
-      if (window.label === key) await window.close()
+      await activeWidgetsStore.delete(key)
+      await activeWidgetsStore.save()
+
+      setActiveWidgets(prev => prev.filter(it => getWidgetKey(it.meta.id, it.instanceId) !== key))
+
+      for (const window of await getAllWindows()) {
+        if (window.label === key) await window.close()
+      }
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -73,7 +84,7 @@ export function ActiveWidgets() {
                 <PiNotePencil className="text-lg" /> Edit
               </Button>
 
-              <Button size="sm" variant="danger-soft" onPress={() => onRemove(it)}>
+              <Button size="sm" variant="danger-soft" onPress={() => onRemove(it)} isPending={isLoading}>
                 <PiTrash className="text-lg" /> Remove
               </Button>
             </div>

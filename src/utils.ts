@@ -24,7 +24,7 @@ export const constants = {
   PERM_AUDIO_EXEC: 'audio:exec',
   PERM_STORE_READ: 'store:read',
   PERM_STORE_WRITE: 'store:write',
-}
+} as const
 
 export const activeWidgetsStore = await loadStore('active-widgets-store.json', { autoSave: false })
 
@@ -57,24 +57,30 @@ export function createWidgetWindow({ meta, instanceId, isLocked, isPinned, heigh
   })
 
   window.once('tauri://created', async () => {
-    if (!meta.isBackground) {
-      if (isPinned) await window.setAlwaysOnTop(true)
-      else await window.setAlwaysOnBottom(true)
-    }
+    try {
+      console.info(`widget window created: '${key}'`)
 
-    await window.show()
+      if (!meta.isBackground) {
+        if (isPinned) await window.setAlwaysOnTop(true)
+        else await window.setAlwaysOnBottom(true)
+      }
 
-    if (meta.isBackground) {
-      await attachWindowAsWallpaper(key)
-      if (import.meta.env.DEV) await setInteractive(true, key)
-    }
+      await window.show()
 
-    if (meta.permissions.some(it => it === 'media:read')) {
-      await startMediaListener(key)
-    }
+      if (meta.isBackground) {
+        await attachWindowAsWallpaper(key)
+        if (import.meta.env.DEV) await setInteractive(true, key)
+      }
 
-    if (meta.permissions.some(it => it === 'audio:read')) {
-      await startAudioCapture(key)
+      if (meta.permissions.some(it => it === constants.PERM_MEDIA_READ)) {
+        await startMediaListener(key)
+      }
+
+      if (meta.permissions.some(it => it === constants.PERM_AUDIO_READ)) {
+        await startAudioCapture(key)
+      }
+    } catch (err) {
+      console.error(err)
     }
   })
 
@@ -83,13 +89,13 @@ export function createWidgetWindow({ meta, instanceId, isLocked, isPinned, heigh
   return window
 }
 
-export function extractErrorMessage(err: unknown) {
+export function extractErrorMessage(err: unknown): string {
   const defaultMessage = 'unknown error'
 
   if (!err) return defaultMessage
   else if (err instanceof Error) return err.message
   else if (typeof err === 'string') return err
-  else if (typeof err === 'object' && 'message' in err) return err.message
+  else if (typeof err === 'object' && 'message' in err && typeof err.message === 'string') return err.message
   else {
     try {
       return JSON.stringify(err)

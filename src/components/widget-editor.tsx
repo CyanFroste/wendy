@@ -4,7 +4,7 @@ import { readTextFile } from '@tauri-apps/plugin-fs'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import { openUrl } from '@tauri-apps/plugin-opener'
 import { getAllWindows, currentMonitor as getCurrentMonitor } from '@tauri-apps/api/window'
-import { Button, Chip, Code, Link, Modal, Separator } from '@heroui/react'
+import { Button, Chip, Code, Link, Modal, Separator, toast } from '@heroui/react'
 import { PiArrowClockwise, PiImageFill, PiPlus } from 'react-icons/pi'
 import { invokeWidgetRpc, getWidget, readFile } from '@/commands'
 import {
@@ -28,11 +28,15 @@ export function WidgetEditor() {
 
   const [widget, setWidget] = useState<Nullable<Widget>>(null)
   const [srcDoc, setSrcDoc] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
 
   const onUpdate = async (widget: Widget, instanceId: string, data?: Nullable<unknown>) => {
     const key = getWidgetKey(widget.id, instanceId)
+
+    console.info(`updating widget: '${key}'`)
+
     const activeWidget = await activeWidgetsStore.get<ActiveWidget>(key)
-    if (!activeWidget) return
+    if (!activeWidget) throw new Error(`widget not found with key: '${key}'`)
 
     activeWidget.meta = widget
     activeWidget.data = data
@@ -42,11 +46,16 @@ export function WidgetEditor() {
 
     await (await getAllWindows()).find(w => w.label === key)?.close()
     createWidgetWindow(activeWidget)
+
+    return key
   }
 
   const onCreate = async (widget: Widget, data?: Nullable<unknown>) => {
     const instanceId = crypto.randomUUID()
     const key = getWidgetKey(widget.id, instanceId)
+
+    console.info(`creating widget: '${key}'`)
+
     const currentMonitor = await getCurrentMonitor()
     let [width, height] = [400, 400]
 
@@ -71,40 +80,59 @@ export function WidgetEditor() {
 
     await activeWidgetsStore.set(key, activeWidget)
     await activeWidgetsStore.save()
-
     createWidgetWindow(activeWidget)
+
+    return key
   }
 
-  const onAction = async () => {
+  const onAction = () => {
     if (!editorRef.current || !widget) return
 
-    const data = await new Promise((resolve, reject) => {
-      const editorWindow = editorRef.current?.contentWindow
-      if (!editorWindow) return reject(new Error('no editor window'))
+    const fn = async () => {
+      try {
+        setIsLoading(true)
 
-      const timeoutId = setTimeout(() => {
-        cleanup()
-        reject(new Error('widget editor response timed out'))
-      }, 5000)
+        const data = await new Promise((resolve, reject) => {
+          const editorWindow = editorRef.current?.contentWindow
+          if (!editorWindow) return reject(new Error('no editor window'))
 
-      const handler = (evt: MessageEvent) => {
-        if (evt.source === editorWindow && evt.data.type === 'WIDGET_EDITOR_DATA') {
-          cleanup()
-          resolve(evt.data.payload)
-        }
+          const timeoutId = setTimeout(() => {
+            cleanup()
+            reject(new Error('widget editor response timed out'))
+          }, 3000)
+
+          const handler = (evt: MessageEvent) => {
+            if (evt.source === editorWindow && evt.data.type === 'WIDGET_EDITOR_DATA') {
+              cleanup()
+              resolve(evt.data.payload)
+            }
+          }
+
+          const cleanup = () => {
+            clearTimeout(timeoutId)
+            window.removeEventListener('message', handler)
+          }
+
+          window.addEventListener('message', handler)
+          editorWindow.postMessage({ type: 'REQUEST_WIDGET_EDITOR_DATA' }, '*')
+        })
+
+        if (instanceId) return await onUpdate(widget, instanceId, data)
+        return await onCreate(widget, data)
+      } catch (err) {
+        console.error(err)
+        // TODO?: try to create the widget with no data ?
+        throw err
+      } finally {
+        setIsLoading(false)
       }
+    }
 
-      const cleanup = () => {
-        clearTimeout(timeoutId)
-        window.removeEventListener('message', handler)
-      }
-
-      window.addEventListener('message', handler)
-      editorWindow.postMessage({ type: 'REQUEST_WIDGET_EDITOR_DATA' }, '*')
+    toast.promise(fn, {
+      error: err => err.message,
+      loading: instanceId ? 'Updating widget...' : 'Creating widget...',
+      success: key => `Widget ${instanceId ? 'updated' : 'created'} (${key})`,
     })
-
-    if (instanceId) onUpdate(widget, instanceId, data)
-    else onCreate(widget, data)
   }
 
   useEffect(() => {
@@ -154,6 +182,8 @@ export function WidgetEditor() {
 
           containerWindow.postMessage(res, '*', transfer)
         } catch (err) {
+          console.error(err)
+
           const payload = extractErrorMessage(err)
           containerWindow.postMessage({ type: 'RPC_ERROR_RESPONSE', id, payload } satisfies RpcResponse, '*')
         }
@@ -167,11 +197,15 @@ export function WidgetEditor() {
   useEffect(() => {
     if (!id) return
     ;(async () => {
-      const widget = await getWidget(globalStore.getState().widgetsPath, id)
-      if (!widget) return
+      try {
+        const widget = await getWidget(globalStore.getState().widgetsPath, id)
+        if (!widget) return
 
-      setWidget(widget)
-      setSrcDoc(await createSrcDoc(widget))
+        setWidget(widget)
+        setSrcDoc(await createSrcDoc(widget))
+      } catch (err) {
+        console.error(err)
+      }
     })()
   }, [id, instanceId])
 
@@ -294,7 +328,7 @@ export function WidgetEditor() {
           {instanceId ? `UPDATE INSTANCE (${instanceId})` : 'CREATE NEW INSTANCE'}
         </div>
 
-        <Button className="ml-auto" onPress={onAction}>
+        <Button className="ml-auto" onPress={onAction} isPending={isLoading}>
           {instanceId ? (
             <>
               <PiArrowClockwise className="text-lg" /> Update

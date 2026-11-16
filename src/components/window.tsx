@@ -18,16 +18,19 @@ export function Window() {
   const [activeWidgetsCount, setActiveWidgetsCount] = useState(0)
 
   const onActiveWidgetsChange = async () => {
-    const count = await activeWidgetsStore.length()
-    setActiveWidgetsCount(count)
+    setActiveWidgetsCount(await activeWidgetsStore.length())
   }
 
   const refetch = async () => {
-    await activeWidgetsStore.reload()
-    await onActiveWidgetsChange()
-    await getWidgets(store.widgetsPath, true)
+    try {
+      await activeWidgetsStore.reload()
+      await onActiveWidgetsChange()
+      await getWidgets(store.widgetsPath, true)
 
-    globalStore.setState(prev => ({ refetchCounter: prev.refetchCounter + 1 }))
+      globalStore.setState(prev => ({ refetchCounter: prev.refetchCounter + 1 }))
+    } catch (err) {
+      console.error(err)
+    }
   }
 
   useEffect(() => {

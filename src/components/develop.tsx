@@ -37,50 +37,62 @@ export function Develop() {
   const [permissions, setPermissions] = useState<Map<string, string[]>>(new Map())
   const [allowedDomains, setAllowedDomains] = useState<string[]>([])
   const [allowedStores, setAllowedStores] = useState<string[]>([])
-  const [isCreating, setIsCreating] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
 
   const isCreateDisabled = !id.trim() || !name.trim() || !author.trim()
 
-  const onCreate = async () => {
-    try {
-      setIsCreating(true)
+  const onCreate = () => {
+    const fn = async () => {
+      try {
+        setIsLoading(true)
 
-      const widget: Widget = {
-        id: id.trim(),
-        name: name.trim(),
-        author: author.trim(),
-        isBackground,
-        version: '1.0.0',
-        allowedDomains: permissions.has('network') ? allowedDomains.map(it => it.trim()) : [],
-        allowedStores: permissions.has('store') ? allowedStores.map(it => it.trim()) : [],
-        permissions: permissions
-          .entries()
-          .reduce<string[]>((acc, [ns, perms]) => acc.concat(perms.map(p => `${ns}:${p}`)), []),
-        path: '',
-        description: '',
-        previewPath: '',
-        source: '',
-        tags: [],
-      }
+        const widget: Widget = {
+          id: id.trim(),
+          name: name.trim(),
+          author: author.trim(),
+          isBackground,
+          version: '1.0.0',
+          allowedDomains: permissions.has('network') ? allowedDomains.map(it => it.trim()) : [],
+          allowedStores: permissions.has('store') ? allowedStores.map(it => it.trim()) : [],
+          permissions: permissions
+            .entries()
+            .reduce<string[]>((acc, [ns, perms]) => acc.concat(perms.map(p => `${ns}:${p}`)), []),
+          path: '',
+          description: '',
+          previewPath: '',
+          source: '',
+          tags: [],
+        }
 
-      const promise = createNewProject(store.widgetsPath, widget).then(data => {
+        const data = await createNewProject(store.widgetsPath, widget)
+
         setAuthor('')
         setName('')
         setId('')
 
         return data
-      })
-
-      toast.promise(promise, {
-        error: err => err.message,
-        loading: 'Creating new project...',
-        success: ({ path }) => `Project created at ${path}`,
-      })
-    } catch (err) {
-      console.error(err)
-    } finally {
-      setIsCreating(false)
+      } catch (err) {
+        console.error(err)
+        throw err
+      } finally {
+        setIsLoading(false)
+      }
     }
+
+    toast.promise(fn, {
+      error: err => err.message,
+      loading: 'Creating new project...',
+      success: ({ path }) => `Project created at ${path}`,
+    })
+  }
+
+  const onPermissionChange = (ns: string) => (value: string[]) => {
+    const newPermissions = new Map(permissions)
+
+    if (value.length) newPermissions.set(ns, value)
+    else newPermissions.delete(ns)
+
+    setPermissions(newPermissions)
   }
 
   return (
@@ -88,7 +100,7 @@ export function Develop() {
       <div className="flex items-center w-full">
         <div className="text-2xl leading-none my-2">Develop</div>
 
-        <Button className="ml-auto" onPress={onCreate} isDisabled={isCreateDisabled || isCreating}>
+        <Button className="ml-auto" onPress={onCreate} isDisabled={isCreateDisabled} isPending={isLoading}>
           <PiPlus className="text-lg" /> Create new project
         </Button>
       </div>
@@ -153,14 +165,7 @@ export function Develop() {
                 key={ns}
                 className="p-4"
                 value={permissions.get(ns) ?? []}
-                onChange={value => {
-                  const newPermissions = new Map(permissions)
-
-                  if (value.length) newPermissions.set(ns, value)
-                  else newPermissions.delete(ns)
-
-                  setPermissions(newPermissions)
-                }}>
+                onChange={onPermissionChange(ns)}>
                 <Label className="uppercase text-sm">{ns}</Label>
 
                 {perms.map(perm => (

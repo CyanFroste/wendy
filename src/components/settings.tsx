@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Button, Input, Label, Separator } from '@heroui/react'
+import { Button, Input, Label, Separator, toast } from '@heroui/react'
 import { open as openFilePicker } from '@tauri-apps/plugin-dialog'
 import { revealItemInDir } from '@tauri-apps/plugin-opener'
 import { PiCheck, PiFolder, PiMagnifyingGlass, PiPlus, PiX } from 'react-icons/pi'
@@ -13,19 +13,64 @@ export function Settings() {
   const [widgetsPath, setWidgetsPath] = useState('')
   const [fsScopeList, setFsScopeList] = useState<ScopedDir[]>([])
   const [allowedPath, setAllowedPath] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
 
   const isChanged = store.widgetsPath !== widgetsPath
 
-  const onSave = async () => {
-    await removeDirFromFsScope(store.widgetsPath)
-    await addDirToFsScope(widgetsPath)
+  const onSave = () => {
+    const fn = async () => {
+      try {
+        setIsLoading(true)
 
-    globalStore.setState({ widgetsPath })
+        await removeDirFromFsScope(store.widgetsPath)
+        await addDirToFsScope(widgetsPath)
+
+        globalStore.setState({ widgetsPath })
+      } catch (err) {
+        console.error(err)
+        throw err
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    toast.promise(fn, {
+      error: err => err.message,
+      loading: 'Saving settings...',
+      success: 'Settings saved',
+    })
+  }
+
+  const onAddPathToFsScope = async () => {
+    try {
+      await addDirToFsScope(allowedPath)
+
+      // always recursive for now and not refetching the list again
+      setFsScopeList(prev => prev.concat({ path: allowedPath, recursive: true }))
+      setAllowedPath('')
+    } catch (err) {
+      console.error(err)
+    }
+  }
+
+  const onRemovePathFromFsScope = (path: string) => async () => {
+    try {
+      await removeDirFromFsScope(path)
+      setFsScopeList(prev => prev.filter(dir => dir.path !== path))
+    } catch (err) {
+      console.error(err)
+    }
   }
 
   useEffect(() => {
-    setWidgetsPath(store.widgetsPath)
-    getFsScopeList().then(data => setFsScopeList(data.filter(it => it.path !== store.widgetsPath)))
+    ;(async () => {
+      try {
+        setWidgetsPath(store.widgetsPath)
+        setFsScopeList((await getFsScopeList()).filter(it => it.path !== store.widgetsPath))
+      } catch (err) {
+        console.error(err)
+      }
+    })()
   }, [])
 
   return (
@@ -33,7 +78,7 @@ export function Settings() {
       <div className="flex items-center">
         <div className="text-2xl leading-none my-2">Settings</div>
 
-        <Button className="ml-auto" isDisabled={!isChanged} onPress={onSave}>
+        <Button className="ml-auto" isDisabled={!isChanged} isPending={isLoading} onPress={onSave}>
           <PiCheck className="text-lg" /> Save changes
         </Button>
       </div>
@@ -83,13 +128,7 @@ export function Settings() {
 
           <div className="flex items-center gap-2">
             {allowedPath && (
-              <Button
-                onPress={async () => {
-                  await addDirToFsScope(allowedPath)
-                  // always recursive for now and not refetching the list again
-                  setFsScopeList(prev => [...prev, { path: allowedPath, recursive: true }])
-                  setAllowedPath('')
-                }}>
+              <Button onPress={onAddPathToFsScope}>
                 <PiPlus className="text-lg" /> Add
               </Button>
             )}
@@ -120,10 +159,7 @@ export function Settings() {
                   isIconOnly
                   variant="ghost"
                   className="shrink-0"
-                  onPress={async () => {
-                    await removeDirFromFsScope(it.path)
-                    setFsScopeList(prev => prev.filter(dir => dir.path !== it.path))
-                  }}>
+                  onPress={onRemovePathFromFsScope(it.path)}>
                   <PiX />
                 </Button>
 

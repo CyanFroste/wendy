@@ -4,10 +4,10 @@ import { convertFileSrc } from '@tauri-apps/api/core'
 import { useStore } from 'zustand'
 import MiniSearch from 'minisearch'
 import { useDebounce } from 'use-debounce'
-import { SearchField, Switch } from '@heroui/react'
+import { SearchField, Switch, toast } from '@heroui/react'
 import { PiImageFill, PiMagnifyingGlass } from 'react-icons/pi'
 import { getWidgets } from '@/commands'
-import { globalStore } from '@/utils'
+import { extractErrorMessage, globalStore } from '@/utils'
 import type { Widget } from '@/types'
 
 const searchIndex = new MiniSearch({
@@ -20,13 +20,12 @@ const searchIndex = new MiniSearch({
 export function Widgets() {
   const store = useStore(globalStore)
   const [widgets, setWidgets] = useState<Widget[]>([])
-
-  const map = new Map(widgets.map(it => [it.id, it]))
   const [filtered, setFiltered] = useState(widgets)
-
   const [searchQuery, setSearchQuery] = useState('')
   const [debouncedSearchQuery] = useDebounce(searchQuery, 500)
   const [showBackgroundsOnly, setShowBackgroundOnly] = useState(false)
+
+  const map = new Map(widgets.map(it => [it.id, it]))
 
   useEffect(() => {
     if (!debouncedSearchQuery.trim()) {
@@ -52,7 +51,14 @@ export function Widgets() {
   }, [widgets])
 
   useEffect(() => {
-    getWidgets(store.widgetsPath).then(setWidgets)
+    ;(async () => {
+      try {
+        setWidgets(await getWidgets(store.widgetsPath))
+      } catch (err) {
+        console.error(err)
+        toast.danger(extractErrorMessage(err))
+      }
+    })()
   }, [store.widgetsPath, store.refetchCounter])
 
   return (
@@ -82,6 +88,10 @@ export function Widgets() {
         </Switch>
       </div>
 
+      {!filtered.length && (
+        <div className="flex size-full justify-center items-center text-muted text-sm tracking-wide">NO WIDGETS</div>
+      )}
+
       <div className="grid grid-cols-4 gap-8 h-fit py-4">
         {filtered.map(it => {
           return (
@@ -98,6 +108,7 @@ export function Widgets() {
               <div className="flex items-center gap-2">
                 {it.isBackground && <PiImageFill className="text-success" />} {it.name}
               </div>
+
               <div className="text-xs text-muted">{it.description}</div>
             </RouterLink>
           )

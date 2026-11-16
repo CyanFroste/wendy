@@ -10,7 +10,7 @@ A widget framework for **Windows** and **HTML Programmers**.
 
 [![Downloads count](https://img.shields.io/github/downloads/CyanFroste/wendy/total.svg)](https://github.com/CyanFroste/wendy/releases)
 [![Latest version](https://img.shields.io/github/v/release/CyanFroste/wendy?label=latest&color=2596be)](https://github.com/CyanFroste/wendy/releases/latest)
-[![License](https://img.shields.io/github/license/CyanFroste/wendy?label=license&color=green)](https://github.com/CyanFroste/wendy/blob/wendy/LICENSE)
+[![License](https://img.shields.io/github/license/CyanFroste/wendy?label=license&color=green)](https://github.com/CyanFroste/wendy/blob/main/LICENSE)
 
 </div>
 

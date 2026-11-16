@@ -33,6 +33,7 @@
     "wallpaper:default",
     "fs:default",
     "dialog:default",
-    "store:default"
+    "store:default",
+    "log:default"
   ]
 }

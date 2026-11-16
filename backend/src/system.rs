@@ -2,7 +2,7 @@ use crate::types::{ExternalStore, FileEntry};
 use anyhow::Result;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64;
-use parking_lot::Mutex;
+use parking_lot::{Mutex, RwLock};
 use serde::{Deserialize, Serialize};
 use std::path::{Component as PathComponent, Path, PathBuf};
 use std::sync::Arc;
@@ -14,8 +14,8 @@ use walkdir::WalkDir;
 const FS_SCOPE_LIST_KEY: &str = "scopes";
 
 pub struct SystemState {
-    pub system: Mutex<System>,
-    pub installed_apps: Arc<Vec<InstalledApp>>,
+    pub system: Arc<Mutex<System>>,
+    pub installed_apps: Arc<RwLock<Vec<InstalledApp>>>,
     // TODO: can move this to a ScopeManager, may not use ExternalStore
     pub asset_scope: Scope,
     pub fs_scope: Scope,
@@ -38,12 +38,30 @@ impl SystemState {
         system.refresh_memory();
 
         Ok(Self {
-            system: Mutex::new(system),
-            installed_apps: Arc::new(get_installed_apps()),
+            system: Arc::new(Mutex::new(system)),
+            installed_apps: Arc::new(RwLock::new(Vec::new())),
             asset_scope,
             fs_scope,
             fs_scope_store,
         })
+    }
+
+    pub async fn init(&self) -> Result<()> {
+        let installed_apps = Arc::clone(&self.installed_apps);
+        let system = Arc::clone(&self.system);
+
+        tokio::task::spawn_blocking(move || {
+            let mut guard = system.lock();
+
+            guard.refresh_cpu_all();
+            guard.refresh_memory();
+            drop(guard);
+
+            *installed_apps.write() = get_installed_apps();
+        })
+        .await?;
+
+        Ok(())
     }
 
     pub fn get_cpu_info(&self) -> CpuInfo {

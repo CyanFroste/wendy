@@ -36,45 +36,64 @@ export function Widget() {
   const [showControls, setShowControls] = useState(false)
 
   const onUpdateValue = async <K extends keyof ActiveWidget>(key: K, value: ActiveWidget[K]) => {
-    if (!widget) return
-    const widgetKey = getWidgetKey(widget.meta.id, widget.instanceId)
-    const updated = { ...widget, [key]: value }
+    try {
+      if (!widget) throw new Error('widget not found')
 
-    await activeWidgetsStore.set(widgetKey, updated)
-    await activeWidgetsStore.save()
-    setWidget(updated)
+      const widgetKey = getWidgetKey(widget.meta.id, widget.instanceId)
+      const updated = { ...widget, [key]: value }
 
-    if (!widget.meta.isBackground && key === 'isPinned') {
-      await currentWindow.setAlwaysOnBottom(!value)
-      await currentWindow.setAlwaysOnTop(value as boolean)
+      await activeWidgetsStore.set(widgetKey, updated)
+      await activeWidgetsStore.save()
+      setWidget(updated)
+
+      if (!widget.meta.isBackground && key === 'isPinned') {
+        await currentWindow.setAlwaysOnBottom(!value)
+        await currentWindow.setAlwaysOnTop(value as boolean)
+      }
+    } catch (err) {
+      console.error(err)
     }
   }
 
   const onRemove = async () => {
-    if (!widget) return
-    const key = getWidgetKey(widget.meta.id, widget.instanceId)
+    try {
+      if (!widget) throw new Error('widget not found')
+      const key = getWidgetKey(widget.meta.id, widget.instanceId)
 
-    await activeWidgetsStore.delete(key)
-    await activeWidgetsStore.save()
-    currentWindow.close()
+      await activeWidgetsStore.delete(key)
+      await activeWidgetsStore.save()
+      currentWindow.close()
+    } catch (err) {
+      console.error(err)
+    }
   }
 
-  const onEdit = () => {
-    if (!widget) return
-    const key = getWidgetKey(widget.meta.id, widget.instanceId)
+  const onEdit = async () => {
+    try {
+      if (!widget) throw new Error('widget not found')
+      const key = getWidgetKey(widget.meta.id, widget.instanceId)
 
-    emitTo('main', 'redirect', `/editor/${key}`)
+      await emitTo('main', 'redirect', `/editor/${key}`)
+    } catch (err) {
+      console.error(err)
+    }
   }
 
   useEffect(() => {
-    if (!id || !instanceId) return
     ;(async () => {
-      const key = getWidgetKey(id, instanceId)
-      const widget = await activeWidgetsStore.get<ActiveWidget>(key)
-      if (!widget) return
+      try {
+        if (!id || !instanceId) return
 
-      setWidget(widget)
-      setSrcDoc(await createSrcDoc(widget))
+        const key = getWidgetKey(id, instanceId)
+        const widget = await activeWidgetsStore.get<ActiveWidget>(key)
+
+        if (!widget) throw new Error('widget not found')
+
+        setWidget(widget)
+        setSrcDoc(await createSrcDoc(widget))
+      } catch (err) {
+        console.error(err)
+      }
     })()
   }, [id, instanceId])
 
@@ -148,6 +167,8 @@ export function Widget() {
 
           containerWindow.postMessage(res, '*', transfer)
         } catch (err) {
+          console.error(err)
+
           const payload = extractErrorMessage(err)
           containerWindow.postMessage({ type: 'RPC_ERROR_RESPONSE', id, payload } satisfies RpcResponse, '*')
         }
@@ -206,8 +227,12 @@ export function Widget() {
   }, [widget])
 
   useEffect(() => {
-    if (widget?.isLocked) currentWindow.setResizable(false)
-    else currentWindow.setResizable(showControls)
+    try {
+      if (widget?.isLocked) currentWindow.setResizable(false)
+      else currentWindow.setResizable(showControls)
+    } catch (err) {
+      console.error(err)
+    }
   }, [widget, showControls])
 
   return (
